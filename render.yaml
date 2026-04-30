@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: markpdf
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
