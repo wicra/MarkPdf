@@ -192,7 +192,7 @@ app.post('/api/generate', async (req, res) => {
         '--disable-gpu',
         '--disable-accelerated-2d-canvas',
       ],
-      headless: 'new',
+      headless: true,
     });
 
     const page = await browser.newPage();
