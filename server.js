@@ -205,6 +205,9 @@ app.post('/api/generate', async (req, res) => {
             footerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
         });
 
+        console.log('Taille du PDF généré:', pdfBuffer.length, 'octets');
+        console.log('Premiers octets du PDF:', pdfBuffer.slice(0, 50).toString('hex'));
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
         res.setHeader('Content-Length', pdfBuffer.length);
