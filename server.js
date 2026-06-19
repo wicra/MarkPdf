@@ -204,6 +204,7 @@ app.post('/api/generate', async (req, res) => {
     const fullHtml = buildHtml(bodyHtml, safeFilename);
  
     try {
+      console.log('[PDF] Launching Chromium...');
       browser = await puppeteer.launch({
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: [
@@ -227,15 +228,17 @@ app.post('/api/generate', async (req, res) => {
         headless: true,
         dumpio: true, // pipe Chromium stderr to Node.js stdout for crash diagnostics
       });
+      console.log('[PDF] Chromium launched successfully');
     } catch (launchErr) {
       // Chromium n'a pas pu démarrer (libs système manquantes, executablePath invalide, etc.)
-      console.error('Chromium launch failed:', launchErr.message);
+      console.error('[PDF] Chromium launch failed:', launchErr.message);
       return res.status(500).json({
         error: "Le moteur PDF (Chromium) n'a pas pu démarrer sur le serveur. Vérifiez l'installation/les dépendances système.",
       });
     }
  
     const page = await browser.newPage();
+    console.log('[PDF] Page created');
  
     page.on('console', msg => {
       if (msg.type() === 'error') console.warn('[page]', msg.text());
@@ -245,14 +248,18 @@ app.post('/api/generate', async (req, res) => {
     // soient terminées. Si l'un de ces hôtes est lent/bloqué depuis Railway, ça peut
     // timeout. On retombe sur 'load' en cas d'échec plutôt que de planter sec.
     try {
+      console.log('[PDF] Setting content with networkidle0...');
       await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 60_000 });
+      console.log('[PDF] Content set successfully');
     } catch (navErr) {
-      console.warn('networkidle0 timeout, fallback to load:', navErr.message);
+      console.warn('[PDF] networkidle0 timeout, fallback to load:', navErr.message);
       await page.setContent(fullHtml, { waitUntil: 'load', timeout: 30_000 });
+      console.log('[PDF] Content set with load fallback');
     }
  
     // Wait for Mermaid to finish rendering all diagrams (ne bloque pas tout si ça échoue)
     try {
+      console.log('[PDF] Waiting for Mermaid diagrams...');
       await page.waitForFunction(
         () => {
           const all = document.querySelectorAll('div.mermaid');
@@ -261,12 +268,14 @@ app.post('/api/generate', async (req, res) => {
         },
         { timeout: 30_000, polling: 500 },
       );
+      console.log('[PDF] Mermaid diagrams rendered');
     } catch (mermaidErr) {
-      console.warn('Mermaid render timeout, continuing without waiting:', mermaidErr.message);
+      console.warn('[PDF] Mermaid render timeout, continuing without waiting:', mermaidErr.message);
     }
  
     await new Promise(r => setTimeout(r, 1000));
  
+    console.log('[PDF] Calling page.pdf()...');
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -276,6 +285,7 @@ app.post('/api/generate', async (req, res) => {
       footerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
       timeout: 45_000, // 45 s — give Chromium enough time under memory pressure
     });
+    console.log('[PDF] page.pdf() returned, buffer size:', pdfBuffer ? pdfBuffer.length : 'null');
  
     // Garde-fou : un PDF valide commence toujours par "%PDF-". Si ce n'est pas le cas
     // (buffer vide, tronqué, ou erreur silencieuse de Chromium), on refuse de l'envoyer
@@ -285,19 +295,23 @@ app.post('/api/generate', async (req, res) => {
       pdfBuffer.subarray(0, 5).toString('latin1') === '%PDF-';
  
     if (!isValidPdf) {
-      console.error('PDF buffer invalide, taille:', pdfBuffer ? pdfBuffer.length : 'null');
+      console.error('[PDF] PDF buffer invalide, taille:', pdfBuffer ? pdfBuffer.length : 'null');
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        console.error('[PDF] First 100 bytes:', pdfBuffer.subarray(0, 100).toString('utf8', 0, 100));
+      }
       return res.status(500).json({
         error: 'Le PDF généré est invalide (génération incomplète). Veuillez réessayer.',
       });
     }
  
+    console.log('[PDF] PDF is valid, sending to client');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
     res.end(pdfBuffer);
  
   } catch (err) {
-    console.error('PDF generation error:', err.message);
+    console.error('[PDF] PDF generation error:', err.message, err.stack);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Erreur lors de la génération du PDF. Veuillez réessayer.' });
     }
@@ -312,3 +326,4 @@ app.post('/api/generate', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`MarkPDF running on http://localhost:${PORT}`);
 });
+
