@@ -4,9 +4,15 @@ const express = require('express');
 const puppeteer = require('puppeteer');
 const { marked } = require('marked');
 const path = require('path');
+const os = require('os');
  
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Minimum free memory (in bytes) required before launching Chromium.
+// Below this threshold we reject the request with 503 rather than letting
+// Chromium crash silently and return a corrupt buffer.
+const MIN_FREE_MEMORY_BYTES = 300 * 1024 * 1024; // 300 MB
  
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -161,6 +167,20 @@ app.post('/api/generate', async (req, res) => {
       error: 'Une génération est déjà en cours. Veuillez patienter quelques secondes.',
     });
   }
+
+  // Pre-flight memory check: if the system is already under heavy memory
+  // pressure, reject early rather than letting Chromium crash mid-render and
+  // return a corrupt buffer.
+  const freeMem = os.freemem();
+  if (freeMem < MIN_FREE_MEMORY_BYTES) {
+    console.warn(
+      `Low memory pre-flight check failed: ${Math.round(freeMem / 1024 / 1024)} MB free ` +
+      `(minimum required: ${Math.round(MIN_FREE_MEMORY_BYTES / 1024 / 1024)} MB)`,
+    );
+    return res.status(503).json({
+      error: 'Mémoire insuffisante sur le serveur. Veuillez réessayer dans quelques instants.',
+    });
+  }
  
   const { markdown, filename = 'document' } = req.body;
  
@@ -192,8 +212,21 @@ app.post('/api/generate', async (req, res) => {
           '--disable-dev-shm-usage',
           '--disable-gpu',
           '--disable-accelerated-2d-canvas',
+          // Memory-saving flags: reduce Chromium's footprint on the 3 GB plan
+          '--single-process',
+          '--disable-background-networking',
+          '--disable-breakpad',
+          '--disable-client-side-phishing-detection',
+          '--disable-default-apps',
+          '--disable-hang-monitor',
+          '--disable-popup-blocking',
+          '--disable-prompt-on-repost',
+          '--disable-sync',
+          '--metrics-recording-only',
+          '--mute-audio',
         ],
         headless: true,
+        dumpio: true, // pipe Chromium stderr to Node.js stdout for crash diagnostics
       });
     } catch (launchErr) {
       // Chromium n'a pas pu démarrer (libs système manquantes, executablePath invalide, etc.)
@@ -242,6 +275,7 @@ app.post('/api/generate', async (req, res) => {
       displayHeaderFooter: true,
       headerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-top:4px;font-family:sans-serif;">${safeFilename}</div>`,
       footerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
+      timeout: 45_000, // 45 s — give Chromium enough time under memory pressure
     });
  
     // Garde-fou : un PDF valide commence toujours par "%PDF-". Si ce n'est pas le cas
