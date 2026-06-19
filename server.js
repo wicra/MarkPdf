@@ -213,7 +213,6 @@ app.post('/api/generate', async (req, res) => {
           '--disable-gpu',
           '--disable-accelerated-2d-canvas',
           // Memory-saving flags: reduce Chromium's footprint on the 3 GB plan
-          '--single-process',
           '--disable-background-networking',
           '--disable-breakpad',
           '--disable-client-side-phishing-detection',
