@@ -1,7 +1,7 @@
+# Utiliser une image Node.js plus légère et compatible
 FROM node:20-slim
- 
-# Install Chromium AND all the shared libraries it needs to actually launch
-# (--no-install-recommends skips these by default, which breaks headless Chrome on Railway/Debian slim)
+
+# Installer les dépendances système nécessaires pour Chromium et Puppeteer
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -25,20 +25,24 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
- 
-# Tell puppeteer to use the system Chromium (skip its own 300MB download)
+
+# Configurer Puppeteer pour utiliser Chromium système
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV NODE_ENV=production
- 
+
+# Créer un répertoire pour l'application
 WORKDIR /app
- 
+
+# Copier les fichiers de configuration et installer les dépendances
 COPY package*.json ./
 RUN npm ci --only=production
- 
+
+# Copier le reste de l'application
 COPY . .
- 
+
+# Exposer le port de l'application
 EXPOSE 3000
- 
+
+# Lancer l'application
 CMD ["node", "server.js"]
- 
