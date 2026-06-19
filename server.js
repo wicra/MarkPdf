@@ -3,10 +3,11 @@ const express = require('express');
 const puppeteer = require('puppeteer');
 const { marked } = require('marked');
 const path = require('path');
+const fs = require('fs'); // Ajout pour sauvegarder le PDF temporairement
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '10mb' })); // Augmentez la limite de taille
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── PDF styles ─────────────────────────────────────────────────────────────
@@ -136,19 +137,25 @@ let busy = false;
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.post('/api/generate', async (req, res) => {
+    console.log('Requête reçue pour générer un PDF');
+
     if (busy) {
+        console.log('Une génération est déjà en cours');
         return res.status(429).json({
             error: 'Une génération est déjà en cours. Veuillez patienter quelques secondes.',
         });
     }
 
     const { markdown, filename = 'document' } = req.body;
+    console.log('Contenu Markdown reçu, taille:', markdown.length);
 
     if (!markdown || typeof markdown !== 'string' || markdown.trim().length === 0) {
+        console.log('Contenu Markdown vide ou invalide');
         return res.status(400).json({ error: 'Le contenu Markdown est vide.' });
     }
 
-    if (markdown.length > 5_000_000) { // Augmentez la limite à 5 Mo
+    if (markdown.length > 5_000_000) {
+        console.log('Contenu Markdown trop volumineux');
         return res.status(400).json({ error: 'Document trop volumineux (max 5 Mo de texte).' });
     }
 
@@ -161,9 +168,11 @@ app.post('/api/generate', async (req, res) => {
             .replace(/[^a-zA-Z0-9\-_. ]/g, '_')
             .trim() || 'document';
 
+        console.log('Conversion du Markdown en HTML...');
         const bodyHtml = marked.parse(markdown);
         const fullHtml = buildHtml(bodyHtml, safeFilename);
 
+        console.log('Lancement de Puppeteer...');
         browser = await puppeteer.launch({
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
             args: [
@@ -172,7 +181,7 @@ app.post('/api/generate', async (req, res) => {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--disable-accelerated-2d-canvas',
-                '--no-zygote', // Ajoutez cette option pour éviter les erreurs DBus
+                '--no-zygote',
             ],
             headless: true,
         });
@@ -182,20 +191,22 @@ app.post('/api/generate', async (req, res) => {
             if (msg.type() === 'error') console.warn('[page]', msg.text());
         });
 
-        await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 120_000 }); // Augmentez le timeout
+        console.log('Chargement du contenu HTML dans la page...');
+        await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 120_000 });
 
-        // Attendez que Mermaid ait fini de rendre tous les diagrammes
+        console.log('Attente du rendu des diagrammes Mermaid...');
         await page.waitForFunction(
             () => {
                 const all = document.querySelectorAll('div.mermaid');
                 if (all.length === 0) return true;
                 return document.querySelectorAll('div.mermaid svg').length >= all.length;
             },
-            { timeout: 60_000, polling: 500 }, // Augmentez le timeout
+            { timeout: 60_000, polling: 500 },
         );
 
         await new Promise(r => setTimeout(r, 1000));
 
+        console.log('Génération du PDF...');
         const pdfBuffer = await page.pdf({
             format: 'A4',
             printBackground: true,
@@ -208,16 +219,23 @@ app.post('/api/generate', async (req, res) => {
         console.log('Taille du PDF généré:', pdfBuffer.length, 'octets');
         console.log('Premiers octets du PDF:', pdfBuffer.slice(0, 50).toString('hex'));
 
+        // Sauvegarder le PDF temporairement pour vérification
+        const tempPdfPath = `/tmp/${safeFilename}.pdf`;
+        fs.writeFileSync(tempPdfPath, pdfBuffer);
+        console.log('PDF sauvegardé temporairement:', tempPdfPath);
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
         res.setHeader('Content-Length', pdfBuffer.length);
+        console.log('Envoi du PDF au client...');
         res.send(pdfBuffer);
     } catch (err) {
-        console.error('PDF generation error:', err.message);
+        console.error('Erreur lors de la génération du PDF:', err);
         res.status(500).json({ error: 'Erreur lors de la génération du PDF. Veuillez réessayer.' });
     } finally {
         if (browser) await browser.close().catch(() => {});
         busy = false;
+        console.log('Génération terminée');
     }
 });
 
