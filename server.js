@@ -100,13 +100,15 @@ h2 { page-break-before: auto; }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function buildHtml(bodyHtml, title) {
+function buildHtml(bodyHtml, title, templateCss, customCss) {
+    const activeTemplateCss = templateCss || PDF_STYLE;
     return `<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <title>${title}</title>
-    <style>${PDF_STYLE}</style>
+    <style>${activeTemplateCss}</style>
+    <style>${customCss || ''}</style>
 </head>
 <body>
 ${bodyHtml}
@@ -241,7 +243,7 @@ app.post('/api/generate', async (req, res) => {
     console.log('Requête reçue pour générer un PDF');
     logMemory('Start Generation Request');
 
-    const { markdown, filename = 'document', includeHeaderFooter = true } = req.body;
+    const { markdown, filename = 'document', includeHeaderFooter = true, templateCss = '', customCss = '', footerTemplate = '', headerTemplate = '' } = req.body;
     console.log('Contenu Markdown reçu, taille:', markdown ? markdown.length : 0);
 
     if (!markdown || typeof markdown !== 'string' || markdown.trim().length === 0) {
@@ -265,7 +267,7 @@ app.post('/api/generate', async (req, res) => {
 
             console.log('Conversion du Markdown en HTML...');
             const bodyHtml = marked.parse(markdown);
-            const fullHtml = buildHtml(bodyHtml, safeFilename);
+            const fullHtml = buildHtml(bodyHtml, safeFilename, templateCss, customCss);
 
             const browser = await getBrowser();
             browserUsageCount++;
@@ -309,8 +311,8 @@ app.post('/api/generate', async (req, res) => {
                 printBackground: true,
                 margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
                 displayHeaderFooter: !!includeHeaderFooter,
-                headerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-top:4px;font-family:sans-serif;">${safeFilename}</div>`,
-                footerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
+                headerTemplate: headerTemplate || `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-top:4px;font-family:sans-serif;">${safeFilename}</div>`,
+                footerTemplate: footerTemplate || `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
             });
 
             // Convertir Uint8Array en Buffer Node.js
