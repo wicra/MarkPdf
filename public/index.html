@@ -3,560 +3,1126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MarkPDF — Markdown + Mermaid vers PDF</title>
+  <title>MarkPDF — Convertisseur Markdown + Mermaid & PNG</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
   <style>
-    /* ── Reset & variables ──────────────────────────────────────── */
+    /* ── Reset & Theme Variables ─────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
     :root {
-      --bg: #f1f5f9;
-      --header-bg: #0f172a;
-      --header-fg: #f8fafc;
+      /* Warm Red/Rose/Orange Palette for MarkPDF */
+      --bg: #fdfafb;
+      --bg-header: #1c0e10;
+      --fg-header: #ffe4e6;
       --panel: #ffffff;
-      --border: #e2e8f0;
-      --accent: #6366f1;
-      --accent-h: #4f46e5;
-      --accent-fg: #ffffff;
-      --text: #1e293b;
-      --muted: #64748b;
-      --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
-      --radius: 8px;
+      --panel-header: #fff1f2;
+      --border: #fecdd3;
+      --border-focus: #f43f5e;
+      --accent: #e11d48;
+      --accent-hover: #be123c;
+      --accent-light: #ffe4e6;
+      --accent-gradient: linear-gradient(135deg, #f43f5e, #f97316);
+      --text: #1f0b0e;
+      --text-muted: #881337;
+      --paper-bg: #ffffff;
+      --paper-shadow: 0 10px 25px -5px rgba(225, 29, 72, 0.05), 0 8px 10px -6px rgba(225, 29, 72, 0.05);
+      
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --radius-sm: 6px;
+      --radius: 12px;
+      --radius-lg: 16px;
+      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    html, body { height: 100%; overflow: hidden; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      font-size: 14px;
+
+    body.dark-mode {
+      /* Dark Warm Mode Palette for MarkPDF */
+      --bg: #0f0709;
+      --bg-header: #14080a;
+      --fg-header: #ffe4e6;
+      --panel: #160c0e;
+      --panel-header: #241013;
+      --border: #3b141a;
+      --border-focus: #f43f5e;
+      --accent: #fb7185;
+      --accent-hover: #fda4af;
+      --accent-light: #4c0519;
+      --text: #ffe4e6;
+      --text-muted: #fda4af;
+      --paper-bg: #1f0f12;
+      --paper-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
     }
+
+    body.mermaid-mode {
+      /* Vibrant Emerald Green Theme for MermaidPNG */
+      --bg: #f6fcf9;
+      --bg-header: #051d14;
+      --fg-header: #d1fae5;
+      --panel: #ffffff;
+      --panel-header: #ecfdf5;
+      --border: #a7f3d0;
+      --border-focus: #10b981;
+      --accent: #059669;
+      --accent-hover: #047857;
+      --accent-light: #d1fae5;
+      --accent-gradient: linear-gradient(135deg, #10b981, #06b6d4);
+      --text: #022c22;
+      --text-muted: #047857;
+      --paper-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.05), 0 8px 10px -6px rgba(5, 150, 105, 0.05);
+    }
+
+    body.mermaid-mode.dark-mode {
+      /* Dark Cyberpunk Green Theme for MermaidPNG */
+      --bg: #040907;
+      --bg-header: #05100c;
+      --fg-header: #d1fae5;
+      --panel: #0a1411;
+      --panel-header: #0f221c;
+      --border: #14352b;
+      --border-focus: #34d399;
+      --accent: #10b981;
+      --accent-hover: #34d399;
+      --accent-light: #022c22;
+      --text: #e6fcf5;
+      --text-muted: #34d399;
+      --paper-bg: #0f261e;
+    }
+
+    html, body { height: 100%; overflow: hidden; font-family: var(--font-sans); background: var(--bg); color: var(--text); transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
 
     /* ── Header ─────────────────────────────────────────────────── */
     header {
-      background: var(--header-bg);
-      color: var(--header-fg);
+      background: var(--bg-header);
+      color: var(--fg-header);
       display: flex;
       align-items: center;
-      gap: 14px;
-      padding: 0 20px;
-      height: 54px;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 60px;
       flex-shrink: 0;
-      border-bottom: 1px solid #1e293b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      z-index: 10;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      transition: background-color 0.3s;
     }
-    .logo {
+    
+    .logo-area {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 17px;
+      gap: 16px;
+    }
+    
+    .logo-icon {
+      background: var(--accent-gradient);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      box-shadow: 0 4px 10px rgba(244, 63, 94, 0.3);
+      transition: var(--transition);
+    }
+    body.mermaid-mode .logo-icon {
+      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
+    }
+    
+    /* Tool selector dropdown styling */
+    .tool-selector-container {
+      position: relative;
+    }
+    .tool-selector-btn {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--fg-header);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
       font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-    .logo svg { flex-shrink: 0; }
-    .tagline { font-size: 12px; color: #94a3b8; margin-top: 1px; }
-    .header-spacer { flex: 1; }
-    .header-links { display: flex; align-items: center; gap: 8px; }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: rgba(99,102,241,0.2);
-      color: #a5b4fc;
-      border: 1px solid rgba(99,102,241,0.3);
-      border-radius: 20px;
-      padding: 3px 10px;
-      font-size: 11px;
-      font-weight: 500;
-    }
-
-    /* ── Main layout ─────────────────────────────────────────────── */
-    .workspace {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-      gap: 1px;
-      background: var(--border);
-    }
-    .panel {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      background: var(--panel);
-      overflow: hidden;
-      min-width: 0;
-    }
-
-    /* ── Panel toolbar ───────────────────────────────────────────── */
-    .toolbar {
+      cursor: pointer;
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 14px;
-      background: #f8fafc;
+      transition: var(--transition);
+    }
+    .tool-selector-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .tool-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--paper-shadow);
+      width: 280px;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 100;
+      animation: dropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes dropdownFadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .tool-dropdown.active {
+      display: flex;
+    }
+    .tool-dropdown-item {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: var(--transition);
+      color: var(--text);
       border-bottom: 1px solid var(--border);
-      height: 46px;
+      text-align: left;
+    }
+    .tool-dropdown-item:last-child {
+      border-bottom: none;
+    }
+    .tool-dropdown-item:hover {
+      background: var(--panel-header);
+    }
+    .tool-dropdown-item.active {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+    .tool-dropdown-item svg {
+      width: 22px;
+      height: 22px;
       flex-shrink: 0;
     }
-    .toolbar-label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: var(--muted);
+    .tool-dropdown-item div {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.35;
     }
-    .t-spacer { flex: 1; }
-    .filename-tag {
+    .tool-dropdown-item strong {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .tool-dropdown-item span {
       font-size: 11px;
-      color: var(--muted);
-      background: var(--border);
-      padding: 2px 8px;
-      border-radius: 4px;
-      max-width: 180px;
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+
+    .tagline {
+      font-size: 12px;
+      color: #94a3b8;
+      border-left: 1px solid rgba(255,255,255,0.2);
+      padding-left: 12px;
+      margin-left: 4px;
+      display: none;
+    }
+    @media(min-width: 768px) { .tagline { display: inline; } }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ── Workspace ────────────────────────────────────────────────── */
+    .workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100% - 60px);
+      overflow: hidden;
+      background: var(--bg);
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      flex: 1;
+      transition: flex 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s, background-color 0.3s, border-color 0.3s;
+      min-width: 0;
+      box-shadow: var(--paper-shadow);
+    }
+
+    /* Layout Toggle Modes */
+    .workspace.layout-editor .panel-preview {
+      display: none !important;
+    }
+    .workspace.layout-preview .panel-editor {
+      display: none !important;
+    }
+
+    /* ── Panel Toolbar ───────────────────────────────────────────── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: 52px;
+      background: var(--panel-header);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .toolbar-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filename-display {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      transition: var(--transition);
     }
 
     /* ── Buttons ─────────────────────────────────────────────────── */
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 13px;
-      border-radius: 6px;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
       font-size: 13px;
-      font-weight: 500;
-      border: none;
+      font-weight: 600;
+      border: 1px solid transparent;
       cursor: pointer;
-      transition: background 0.12s, opacity 0.12s;
-      white-space: nowrap;
+      transition: var(--transition);
+      color: var(--text);
+      background: transparent;
       outline: none;
     }
-    .btn:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+
     .btn-primary {
       background: var(--accent);
-      color: var(--accent-fg);
+      color: white;
     }
-    .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
-    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
-    .btn-ghost {
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 12px rgba(225, 29, 72, 0.2);
     }
-    .btn-ghost:hover { background: var(--border); color: var(--text); }
+    body.mermaid-mode .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
-    /* ── Editor ──────────────────────────────────────────────────── */
+    .btn-secondary {
+      background: var(--panel);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: var(--panel-header);
+      border-color: var(--border-focus);
+    }
+
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: var(--radius-sm);
+      color: #94a3b8;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .btn-icon:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .btn-icon.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .btn-header {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+    }
+
+    /* ── Editor Textarea ─────────────────────────────────────────── */
+    #editor-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+    }
+
     #editor {
       flex: 1;
+      width: 100%;
+      height: 100%;
       resize: none;
       border: none;
       outline: none;
-      padding: 20px;
-      font-family: var(--mono);
-      font-size: 13px;
-      line-height: 1.65;
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.7;
       color: var(--text);
-      background: #fff;
-      tab-size: 2;
+      background: var(--panel);
+      transition: var(--transition);
       overflow-y: auto;
     }
-    #editor::placeholder { color: #cbd5e1; }
+    #editor::placeholder { color: var(--text-muted); opacity: 0.5; }
+    #editor.drag-over {
+      background: var(--accent-light);
+      outline: 2px dashed var(--accent);
+      outline-offset: -8px;
+    }
     #file-input { display: none; }
 
-    /* ── Preview ─────────────────────────────────────────────────── */
+    /* ── Preview Scroll Area ─────────────────────────────────────── */
     #preview-scroll {
       flex: 1;
       overflow-y: auto;
-      padding: 24px 28px;
-      background: #fff;
+      background: var(--bg);
+      padding: 30px 15px;
+      display: flex;
+      justify-content: center;
+      transition: background-color 0.3s;
     }
 
-    /* Preview typography */
-    #preview-body { max-width: 780px; }
-    #preview-body h1 { font-size: 22px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin: 0 0 18px; color: #0f172a; }
-    #preview-body h2 { font-size: 17px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin: 28px 0 12px; color: #1e293b; }
-    #preview-body h3 { font-size: 14px; margin: 18px 0 8px; color: #334155; }
-    #preview-body h4 { font-size: 13px; margin: 14px 0 6px; color: #475569; }
-    #preview-body p { margin-bottom: 12px; font-size: 13px; line-height: 1.7; }
-    #preview-body ul, #preview-body ol { padding-left: 20px; margin-bottom: 12px; font-size: 13px; }
-    #preview-body li { margin-bottom: 4px; }
-    #preview-body strong { font-weight: 600; }
-    #preview-body em { font-style: italic; }
-    #preview-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 22px 0; }
+    /* Elegant Page Container */
+    #preview-body {
+      width: 100%;
+      max-width: 800px;
+      min-height: 100%;
+      background: var(--paper-bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      box-shadow: var(--paper-shadow);
+      padding: 50px 45px;
+      color: var(--text);
+      transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+    }
+
+    /* Preview Typography (mimicking PDF render) */
+    #preview-body h1 {
+      font-size: 26px;
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 8px;
+      margin: 0 0 20px;
+      color: var(--text);
+    }
+    #preview-body h2 {
+      font-size: 19px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      margin: 32px 0 14px;
+      color: var(--text);
+    }
+    #preview-body h3 { font-size: 15px; margin: 22px 0 10px; color: var(--text); }
+    #preview-body p { margin-bottom: 14px; font-size: 13.5px; line-height: 1.75; }
+    #preview-body ul, #preview-body ol { padding-left: 24px; margin-bottom: 14px; font-size: 13.5px; }
+    #preview-body li { margin-bottom: 5px; }
     #preview-body blockquote {
-      border-left: 3px solid #6366f1;
-      padding: 8px 16px;
-      background: #f5f3ff;
-      color: #4b5563;
-      border-radius: 0 6px 6px 0;
-      margin: 14px 0;
+      border-left: 4px solid var(--accent);
+      padding: 10px 20px;
+      background: var(--accent-light);
+      color: var(--text);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      margin: 18px 0;
       font-style: italic;
     }
-    #preview-body table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 12px; }
-    #preview-body th, #preview-body td { border: 1px solid #e2e8f0; padding: 7px 11px; text-align: left; }
-    #preview-body th { background: #f1f5f9; font-weight: 600; }
-    #preview-body tr:nth-child(even) td { background: #fafafa; }
+    #preview-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 18px 0;
+      font-size: 12.5px;
+    }
+    #preview-body th, #preview-body td {
+      border: 1px solid var(--border);
+      padding: 9px 12px;
+      text-align: left;
+    }
+    #preview-body th {
+      background: var(--panel-header);
+      font-weight: 600;
+    }
+    #preview-body tr:nth-child(even) td {
+      background: rgba(0,0,0,0.015);
+    }
     #preview-body code {
-      font-family: var(--mono);
-      font-size: 11.5px;
-      background: #f1f5f9;
-      padding: 2px 5px;
-      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--panel-header);
+      padding: 2px 6px;
+      border-radius: 4px;
       color: #be123c;
     }
+    body.dark-mode #preview-body code { color: #f43f5e; }
+    body.mermaid-mode #preview-body code { color: #047857; }
+    body.mermaid-mode.dark-mode #preview-body code { color: #34d399; }
     #preview-body pre {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 13px;
+      background: var(--panel-header);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
       overflow-x: auto;
-      margin: 14px 0;
+      margin: 18px 0;
     }
-    #preview-body pre code { background: none; color: #334155; padding: 0; }
-    #preview-body a { color: #6366f1; text-decoration: none; }
+    #preview-body pre code { background: none; color: inherit; padding: 0; }
+    #preview-body a { color: var(--accent); text-decoration: none; }
     #preview-body a:hover { text-decoration: underline; }
 
-    /* Mermaid in preview */
+    /* Mermaid inside PDF / Preview */
     #preview-body .mermaid {
       display: flex;
       justify-content: center;
-      margin: 16px 0;
+      margin: 20px 0;
       overflow-x: auto;
     }
-    #preview-body .mermaid svg { max-width: 100%; height: auto; }
+    #preview-body .mermaid svg {
+      max-width: 100%;
+      height: auto;
+      background: #fafafa;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    body.dark-mode #preview-body .mermaid svg {
+      background: #1f2937;
+    }
+    
+    /* Mermaid error state */
+    .mermaid-error-container {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      margin: 20px 0;
+      white-space: pre-wrap;
+    }
+    body.dark-mode .mermaid-error-container {
+      background: #2d1414;
+      border-color: #7f1d1d;
+      color: #fca5a5;
+    }
 
-    /* ── Empty state ─────────────────────────────────────────────── */
+    /* ── Empty State ────────────────────────────────────────────── */
     .empty-state {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100%;
-      color: #94a3b8;
+      min-height: 250px;
+      color: var(--text-muted);
       text-align: center;
-      gap: 10px;
-      pointer-events: none;
+      gap: 14px;
     }
-    .empty-state svg { opacity: 0.35; }
-    .empty-state p { font-size: 13px; }
+    .empty-state svg { opacity: 0.4; }
+    .empty-state p { font-size: 14px; }
 
-    /* ── Loading overlay for PDF ─────────────────────────────────── */
-    #loading-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(15,23,42,0.55);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 16px;
-      color: white;
-    }
-    #loading-overlay.active { display: flex; }
-    .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.75s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-text { font-size: 14px; font-weight: 500; }
-    .loading-sub { font-size: 12px; color: #94a3b8; }
-
-    /* ── Toast notification ──────────────────────────────────────── */
+    /* ── Toast Notifications ─────────────────────────────────────── */
     #toast {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      padding: 10px 18px;
-      border-radius: 8px;
-      font-size: 13px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
       font-weight: 500;
       color: white;
       z-index: 200;
       opacity: 0;
-      transform: translateY(8px);
-      transition: opacity 0.2s, transform 0.2s;
+      transform: translateY(12px);
+      transition: opacity 0.3s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       pointer-events: none;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     #toast.show { opacity: 1; transform: translateY(0); }
-    #toast.success { background: #16a34a; }
+    #toast.success { background: #059669; }
     #toast.error { background: #dc2626; }
+    #toast.info { background: #2563eb; }
 
-    /* ── Drag-over hint ──────────────────────────────────────────── */
-    #editor.drag-over {
-      background: #f5f3ff;
-      outline: 2px dashed #6366f1;
-      outline-offset: -4px;
+    /* ── Loading Overlay ─────────────────────────────────────────── */
+    #loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      color: white;
+    }
+    #loading-overlay.active { display: flex; }
+    
+    .spinner-ring {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255,255,255,0.1);
+      border-top: 4px solid var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+    }
+    
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    .loading-title { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+    .loading-desc { font-size: 13px; color: #cbd5e1; text-align: center; max-width: 320px; line-height: 1.5; }
+
+    /* ── Modals General Styling ──────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(5px);
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .modal-container {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 480px;
+      box-shadow: var(--paper-shadow);
+      transform: scale(0.95);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s, border-color 0.3s;
+      overflow: hidden;
+    }
+    .modal-overlay.active .modal-container {
+      transform: scale(1);
     }
 
-    /* ── Scrollbar ───────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.3s;
+    }
+    .modal-header h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 24px;
+      line-height: 1;
+      transition: var(--transition);
+    }
+    .modal-close:hover { color: var(--text); }
+
+    .modal-body {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .form-group label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .input-group {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--panel-header);
+      padding: 0 12px;
+      transition: var(--transition);
+    }
+    .input-group:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+    .input-group input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      height: 38px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .input-suffix {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      user-select: none;
+    }
+
+    /* Switch Style Checkbox */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .checkbox-group input {
+      display: none;
+    }
+    .checkbox-switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      background-color: var(--border);
+      border-radius: 20px;
+      transition: var(--transition);
+    }
+    .checkbox-switch::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: white;
+      top: 3px;
+      left: 3px;
+      transition: var(--transition);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .checkbox-group input:checked + .checkbox-switch {
+      background-color: var(--accent);
+    }
+    .checkbox-group input:checked + .checkbox-switch::after {
+      transform: translateX(18px);
+    }
+    .checkbox-label {
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      background: var(--panel-header);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      transition: background-color 0.3s, border-color 0.3s;
+    }
+    
+    /* ── Missing Images List ── */
+    .missing-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      padding-right: 4px;
+    }
+    .missing-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--panel-header);
+      font-size: 13px;
+      transition: var(--transition);
+    }
+    .missing-item-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      max-width: 70%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .status-badge.missing {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    body.dark-mode .status-badge.missing {
+      background: #7f1d1d;
+      color: #fee2e2;
+    }
+    .status-badge.ready {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    body.dark-mode .status-badge.ready {
+      background: #064e3b;
+      color: #a7f3d0;
+    }
+    
+    /* Drag & drop zone */
+    .drag-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: var(--transition);
+      text-align: center;
+    }
+    .drag-zone:hover, .drag-zone.drag-over {
+      border-color: var(--border-focus);
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+    .drag-zone svg { opacity: 0.7; transition: var(--transition); }
+    .drag-zone:hover svg { transform: translateY(-2px); }
+    .drag-zone span { font-size: 12px; font-weight: 600; }
+
+    /* ── Scrollbars ──────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
   </style>
 </head>
 <body>
 
-<!-- ── Header ──────────────────────────────────────────────────────────── -->
-<header>
-  <div class="logo">
-    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-      <rect width="26" height="26" rx="6" fill="#6366f1"/>
-      <path d="M7 7h5l3 8 3-8h4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-      <path d="M6 17h14" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M9 20h8" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-    </svg>
-    MarkPDF
-  </div>
-  <span class="tagline">Markdown + Mermaid &rarr; PDF</span>
-  <div class="header-spacer"></div>
-  <div class="header-links">
-    <span class="badge">
-      <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-      Open Source
-    </span>
-  </div>
-</header>
-
-<!-- ── Workspace ─────────────────────────────────────────────────────────── -->
-<div class="workspace">
-
-  <!-- Left panel: Editor -->
-  <div class="panel">
-    <div class="toolbar">
-      <span class="toolbar-label">Éditeur</span>
-      <input type="file" id="file-input" accept=".md,.txt,.markdown">
-      <button class="btn btn-ghost" id="upload-btn" title="Ouvrir un fichier .md">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-        Ouvrir
-      </button>
-      <span class="t-spacer"></span>
-      <span class="filename-tag" id="filename-tag">sans titre</span>
-      <button class="btn btn-ghost" id="clear-btn" title="Effacer le contenu">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-        Effacer
-      </button>
-    </div>
-    <textarea id="editor" placeholder="Collez votre Markdown ici, ou ouvrez un fichier .md…
-
-Glissez-déposez un fichier directement dans l'éditeur."></textarea>
-  </div>
-
-  <!-- Right panel: Preview -->
-  <div class="panel">
-    <div class="toolbar">
-      <span class="toolbar-label">Aperçu</span>
-      <span class="t-spacer"></span>
-      <button class="btn btn-primary" id="export-btn" disabled>
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-        Télécharger le PDF
-      </button>
-    </div>
-    <div id="preview-scroll">
-      <div id="preview-body">
-        <div class="empty-state" id="empty-state">
-          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.4" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          <p>L'aperçu s'affiche ici au fur et à mesure que vous écrivez.</p>
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon" id="logo-icon-el">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="logo-svg-pdf">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="logo-svg-png" style="display: none;">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="12" x2="12" y2="22"></line>
+        </svg>
+      </div>
+      
+      <!-- Selector container instead of simple text -->
+      <div class="tool-selector-container">
+        <button class="tool-selector-btn" id="tool-selector-trigger">
+          <span id="current-tool-text">MarkPDF</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="tool-dropdown" id="tool-dropdown-menu">
+          <div class="tool-dropdown-item active" data-tool="markpdf">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <div>
+              <strong>MarkPDF</strong>
+              <span>Markdown + Mermaid &rarr; PDF A4</span>
+            </div>
+          </div>
+          <div class="tool-dropdown-item" data-tool="mermaidpng">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
+            <div>
+              <strong>MermaidPNG</strong>
+              <span>Générateur de diagrammes &rarr; PNG HD</span>
+            </div>
+          </div>
         </div>
+      </div>
+      
+      <span class="tagline" id="tagline-text">Markdown + Mermaid &rarr; PDF</span>
+    </div>
+    
+    <div class="header-actions">
+      <!-- Layout Modes Switcher -->
+      <button class="btn btn-header btn-icon" id="layout-split-btn" title="Écran divisé (côte à côte)">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+      </button>
+      <button class="btn btn-header btn-icon" id="layout-editor-btn" title="Éditeur seul">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>
+      </button>
+      <button class="btn btn-header btn-icon" id="layout-preview-btn" title="Aperçu seul">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+      </button>
+      
+      <!-- Theme Switcher -->
+      <button class="btn btn-header btn-icon" id="theme-btn" title="Changer le thème">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="sun-icon"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Workspace ───────────────────────────────────────────────────────── -->
+  <div class="workspace" id="workspace">
+
+    <!-- Left Panel: Editor -->
+    <div class="panel panel-editor">
+      <div class="toolbar">
+        <div class="toolbar-title" id="editor-toolbar-title">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Éditeur Markdown
+        </div>
+        <div class="toolbar-actions">
+          <span class="filename-display" id="filename-display">sans titre</span>
+          <input type="file" id="file-input" accept=".md,.txt,.markdown,.mermaid,.mmd">
+          <button class="btn btn-secondary" id="upload-btn" title="Ouvrir un fichier">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            Ouvrir
+          </button>
+          <button class="btn btn-secondary" id="copy-btn" title="Copier le code">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copier
+          </button>
+          <button class="btn btn-secondary" id="clear-btn" title="Effacer le contenu">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="editor-container">
+        <textarea id="editor" placeholder="Rédigez votre Markdown ici, ou déposez un fichier .md..."></textarea>
+      </div>
+    </div>
+
+    <!-- Right Panel: Preview -->
+    <div class="panel panel-preview">
+      <div class="toolbar">
+        <div class="toolbar-title" id="preview-toolbar-title">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          Aperçu du Rendu
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn btn-primary" id="action-btn" disabled>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <span id="action-btn-text">Télécharger le PDF</span>
+          </button>
+        </div>
+      </div>
+      <div id="preview-scroll">
+        <div id="preview-body">
+          <div class="empty-state" id="empty-state">
+            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>
+            <p>L'aperçu du document s'affichera ici en temps réel.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Export Settings Modal (MarkPDF) ─────────────────────────────────── -->
+  <div class="modal-overlay" id="export-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Configuration de l'export PDF</h3>
+        <button class="modal-close" id="modal-close-x">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modal-filename-input">Nom du document</label>
+          <div class="input-group">
+            <input type="text" id="modal-filename-input" placeholder="nom-du-fichier" autocomplete="off">
+            <span class="input-suffix">.pdf</span>
+          </div>
+        </div>
+        
+        <label class="checkbox-group">
+          <input type="checkbox" id="modal-header-footer" checked>
+          <div class="checkbox-switch"></div>
+          <span class="checkbox-label">Activer l'en-tête et pied de page</span>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modal-cancel-btn">Annuler</button>
+        <button class="btn btn-primary" id="modal-confirm-btn">Générer & Télécharger</button>
       </div>
     </div>
   </div>
 
-</div>
+  <!-- ── Local Images Import Modal ──────────────────────────────────────── -->
+  <div class="modal-overlay" id="image-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Images locales détectées</h3>
+        <button class="modal-close" id="image-modal-close-x">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+          Votre document fait référence à des images locales. Veuillez fournir les fichiers correspondants pour les incorporer temporairement à la génération :
+        </p>
+        
+        <div class="missing-list" id="missing-images-list">
+          <!-- Dynamically filled items -->
+        </div>
 
-<!-- ── Loading overlay ───────────────────────────────────────────────────── -->
-<div id="loading-overlay">
-  <div class="spinner"></div>
-  <div class="loading-text">Génération du PDF en cours…</div>
-  <div class="loading-sub">Rendu des diagrammes Mermaid et mise en page A4</div>
-</div>
+        <div class="drag-zone" id="image-drag-zone">
+          <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <span>Glissez-déposez ou cliquez pour charger les images requises</span>
+          <input type="file" id="image-file-input" multiple accept="image/*" style="display: none;">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="image-modal-cancel-btn">Ignorer les images</button>
+        <button class="btn btn-primary" id="image-modal-confirm-btn" disabled>Continuer l'export</button>
+      </div>
+    </div>
+  </div>
 
-<!-- ── Toast ─────────────────────────────────────────────────────────────── -->
-<div id="toast"></div>
+  <!-- ── Loading Overlay ─────────────────────────────────────────────────── -->
+  <div id="loading-overlay">
+    <div class="spinner-ring"></div>
+    <div class="loading-title" id="loading-title">Génération en cours...</div>
+    <div class="loading-desc" id="loading-desc">Rendu des éléments graphiques et compilation en cours sur le serveur</div>
+  </div>
 
-<!-- ── Scripts ───────────────────────────────────────────────────────────── -->
-<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>
-'use strict';
+  <!-- ── Toast Notification ─────────────────────────────────────────────── -->
+  <div id="toast"></div>
 
-// ── Mermaid init ────────────────────────────────────────────────────────────
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-  flowchart: { useMaxWidth: true, htmlLabels: true },
-  sequence: { useMaxWidth: true },
-});
+  <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  
+  <script>
+    'use strict';
 
-// ── DOM refs ────────────────────────────────────────────────────────────────
-const editor       = document.getElementById('editor');
-const fileInput    = document.getElementById('file-input');
-const uploadBtn    = document.getElementById('upload-btn');
-const clearBtn     = document.getElementById('clear-btn');
-const exportBtn    = document.getElementById('export-btn');
-const previewBody  = document.getElementById('preview-body');
-const emptyState   = document.getElementById('empty-state');
-const filenameTag  = document.getElementById('filename-tag');
-const loadingOverlay = document.getElementById('loading-overlay');
-const toast        = document.getElementById('toast');
-
-let currentFilename = 'document';
-let previewTimer;
-let toastTimer;
-
-// ── Toast ────────────────────────────────────────────────────────────────────
-function showToast(msg, type = 'success') {
-  clearTimeout(toastTimer);
-  toast.textContent = msg;
-  toast.className = `show ${type}`;
-  toastTimer = setTimeout(() => { toast.className = ''; }, 3500);
-}
-
-// ── Preview rendering ────────────────────────────────────────────────────────
-async function renderPreview() {
-  const md = editor.value;
-
-  if (!md.trim()) {
-    previewBody.innerHTML = '';
-    previewBody.appendChild(emptyState);
-    exportBtn.disabled = true;
-    return;
-  }
-
-  // Parse markdown → HTML
-  const html = marked.parse(md);
-  previewBody.innerHTML = html;
-  exportBtn.disabled = false;
-
-  // Transform ```mermaid blocks into divs
-  previewBody.querySelectorAll('pre code.language-mermaid').forEach(el => {
-    const div = document.createElement('div');
-    div.className = 'mermaid';
-    div.textContent = el.textContent;
-    el.closest('pre').replaceWith(div);
-  });
-
-  // Render diagrams (nodes without data-processed)
-  const mermaidNodes = Array.from(previewBody.querySelectorAll('.mermaid'));
-  if (mermaidNodes.length > 0) {
-    try {
-      await mermaid.run({ nodes: mermaidNodes });
-    } catch (e) {
-      console.warn('Mermaid preview error:', e.message);
-    }
-  }
-}
-
-// Debounced live preview
-editor.addEventListener('input', () => {
-  clearTimeout(previewTimer);
-  previewTimer = setTimeout(renderPreview, 350);
-});
-
-// ── PDF export ───────────────────────────────────────────────────────────────
-exportBtn.addEventListener('click', async () => {
-  const md = editor.value.trim();
-  if (!md) return;
-
-  exportBtn.disabled = true;
-  loadingOverlay.classList.add('active');
-
-  try {
-    const resp = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown: md, filename: currentFilename }),
+    // ── Mermaid Setup ────────────────────────────────────────────────────────
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      sequence: { useMaxWidth: true },
     });
 
-    if (resp.status === 429) {
-      const { error } = await resp.json();
-      showToast(error, 'error');
-      return;
-    }
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}));
-      showToast(body.error || 'Erreur lors de la génération.', 'error');
-      return;
-    }
+    // ── Dom Elements ─────────────────────────────────────────────────────────
+    const workspace       = document.getElementById('workspace');
+    const editor          = document.getElementById('editor');
+    const fileInput       = document.getElementById('file-input');
+    const uploadBtn       = document.getElementById('upload-btn');
+    const copyBtn         = document.getElementById('copy-btn');
+    const clearBtn        = document.getElementById('clear-btn');
+    const actionBtn       = document.getElementById('action-btn');
+    const actionBtnText   = document.getElementById('action-btn-text');
+    const previewBody     = document.getElementById('preview-body');
+    const emptyState      = document.getElementById('empty-state');
+    const filenameDisplay = document.getElementById('filename-display');
+    const loadingOverlay  = document.getElementById('loading-overlay');
+    const toast           = document.getElementById('toast');
+    
+    // Layout buttons
+    const layoutSplitBtn  = document.getElementById('layout-split-btn');
+    const layoutEditorBtn = document.getElementById('layout-editor-btn');
+    const layoutPreviewBtn = document.getElementById('layout-preview-btn');
+    
+    // Theme button & selectors
+    const themeBtn        = document.getElementById('theme-btn');
+    const toolTrigger     = document.getElementById('tool-selector-trigger');
+    const toolMenu        = document.getElementById('tool-dropdown-menu');
+    const toolItems       = document.querySelectorAll('.tool-dropdown-item');
+    const currentToolText = document.getElementById('current-tool-text');
+    const taglineText     = document.getElementById('tagline-text');
+    const logoIconPdf     = document.getElementById('logo-svg-pdf');
+    const logoIconPng     = document.getElementById('logo-svg-png');
+    const editorToolbarTitle = document.getElementById('editor-toolbar-title');
+    const previewToolbarTitle = document.getElementById('preview-toolbar-title');
 
-    const blob = await resp.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = currentFilename.replace(/\.md$/i, '') + '.pdf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('PDF téléchargé avec succès.', 'success');
+    // PDF Export Modal elements
+    const exportModal     = document.getElementById('export-modal');
+    const modalFilenameInput = document.getElementById('modal-filename-input');
+    const modalHeaderFooter = document.getElementById('modal-header-footer');
+    const modalCloseX     = document.getElementById('modal-close-x');
+    const modalCancelBtn  = document.getElementById('modal-cancel-btn');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 
-  } catch (err) {
-    showToast('Impossible de joindre le serveur.', 'error');
-  } finally {
-    exportBtn.disabled = false;
-    loadingOverlay.classList.remove('active');
-  }
-});
+    // Image Modal elements
+    const imageModal        = document.getElementById('image-modal');
+    const missingImagesList = document.getElementById('missing-images-list');
+    const imageDragZone     = document.getElementById('image-drag-zone');
+    const imageFileInput    = document.getElementById('image-file-input');
+    const imageCloseX       = document.getElementById('image-modal-close-x');
+    const imageCancelBtn    = document.getElementById('image-modal-cancel-btn');
+    const imageConfirmBtn   = document.getElementById('image-modal-confirm-btn');
 
-// ── File upload ───────────────────────────────────────────────────────────────
-uploadBtn.addEventListener('click', () => fileInput.click());
+    // ── Application States ───────────────────────────────────────────────────
+    let currentFilename = 'document';
+    let activeTool = 'markpdf'; // 'markpdf' or 'mermaidpng'
+    let loadedImages = {}; // filename -> base64
+    let requiredImages = []; // Array of strings (local paths)
+    let previewTimer;
+    let toastTimer;
 
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-  loadFile(file);
-  fileInput.value = '';
-});
-
-function loadFile(file) {
-  if (file.size > 1_000_000) {
-    showToast('Fichier trop volumineux (max 1 Mo).', 'error');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = e => {
-    editor.value = e.target.result;
-    setFilename(file.name);
-    renderPreview();
-  };
-  reader.readAsText(file, 'utf-8');
-}
-
-function setFilename(name) {
-  currentFilename = name.replace(/\.(md|txt|markdown)$/i, '') || 'document';
-  filenameTag.textContent = currentFilename;
-  filenameTag.title       = currentFilename;
-}
-
-// ── Clear ─────────────────────────────────────────────────────────────────────
-clearBtn.addEventListener('click', () => {
-  if (editor.value && !confirm('Effacer le contenu de l\'éditeur ?')) return;
-  editor.value = '';
-  currentFilename = 'document';
-  filenameTag.textContent = 'sans titre';
-  renderPreview();
-});
-
-// ── Drag & drop on editor ─────────────────────────────────────────────────────
-editor.addEventListener('dragover', e => {
-  e.preventDefault();
-  editor.classList.add('drag-over');
-});
-editor.addEventListener('dragleave', () => editor.classList.remove('drag-over'));
-editor.addEventListener('drop', e => {
-  e.preventDefault();
-  editor.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) loadFile(file);
-});
-
-// ── Sample content on first load ──────────────────────────────────────────────
-const SAMPLE = `# Mon document de test
+    // Default Sample Documents
+    const SAMPLES = {
+      markpdf: `# Mon document de test
 
 ## Architecture
 
@@ -569,6 +1135,11 @@ graph LR
     C --> D[(Base de données)]
 \`\`\`
 
+## Images locales
+
+Vous pouvez également faire référence à des images locales :
+\`![Logo de test](logo-projet.png)\`
+
 ## Tableau de comparaison
 
 | Outil | Langage | Diagrammes | Export PDF |
@@ -577,18 +1148,591 @@ graph LR
 | Pandoc | Haskell | Non natif | Oui |
 | Typora | Electron | Mermaid | Oui (payant) |
 
-## Fonctionnalités
+> Rédigez votre Markdown pour voir l'aperçu à droite.`,
 
-- Rendu **Markdown** complet
-- Diagrammes \`Mermaid\` (flowchart, séquence, classes…)
-- Export PDF A4 avec numérotation de pages
-- Aperçu temps réel
+      mermaidpng: `graph TD
+    A[Éditeur Mermaid] -->|Syntaxe Texte| B(Rendu Visuel)
+    B -->|Export Canvas| C{Image PNG HD}
+    
+    style A fill:#d1fae5,stroke:#059669,stroke-width:2px
+    style B fill:#ecfdf5,stroke:#10b981,stroke-width:2px
+    style C fill:#059669,stroke:#047857,stroke-width:2px,color:#fff`
+    };
 
-> Collez votre propre Markdown ou ouvrez un fichier .md pour commencer.
-`;
+    // ── Local Storage & Setup ──────────────────────────────────────────
+    
+    // Theme Loading
+    if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.body.classList.add('dark-mode');
+      updateThemeIcon(true);
+    } else {
+      updateThemeIcon(false);
+    }
 
-editor.value = SAMPLE;
-renderPreview();
-</script>
+    // Load active tool
+    activeTool = localStorage.getItem('active_tool') || 'markpdf';
+    switchTool(activeTool, false);
+
+    // Layout configuration
+    const activeLayout = localStorage.getItem('layout') || 'split';
+    setLayout(activeLayout);
+
+    layoutSplitBtn.addEventListener('click', () => setLayout('split'));
+    layoutEditorBtn.addEventListener('click', () => setLayout('editor'));
+    layoutPreviewBtn.addEventListener('click', () => setLayout('preview'));
+
+    function setLayout(mode) {
+      workspace.className = 'workspace';
+      layoutSplitBtn.classList.remove('active');
+      layoutEditorBtn.classList.remove('active');
+      layoutPreviewBtn.classList.remove('active');
+      
+      if (mode === 'editor') {
+        workspace.classList.add('layout-editor');
+        layoutEditorBtn.classList.add('active');
+      } else if (mode === 'preview') {
+        workspace.classList.add('layout-preview');
+        layoutPreviewBtn.classList.add('active');
+      } else {
+        layoutSplitBtn.classList.add('active');
+      }
+      localStorage.setItem('layout', mode);
+    }
+
+    // ── Tool Switcher Menu ───────────────────────────────────────────────────
+    toolTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toolMenu.classList.toggle('active');
+    });
+
+    document.addEventListener('click', () => {
+      toolMenu.classList.remove('active');
+    });
+
+    toolItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const tool = item.getAttribute('data-tool');
+        switchTool(tool, true);
+      });
+    });
+
+    function switchTool(tool, resetContent = true) {
+      activeTool = tool;
+      localStorage.setItem('active_tool', tool);
+      
+      toolItems.forEach(i => i.classList.remove('active'));
+      document.querySelector(`.tool-dropdown-item[data-tool="${tool}"]`).classList.add('active');
+
+      // Update Header layout
+      if (tool === 'mermaidpng') {
+        document.body.classList.add('mermaid-mode');
+        currentToolText.textContent = 'MermaidPNG';
+        taglineText.innerHTML = 'Diagramme Mermaid &rarr; Image PNG';
+        logoIconPdf.style.display = 'none';
+        logoIconPng.style.display = 'block';
+        actionBtnText.textContent = 'Télécharger le PNG';
+        editorToolbarTitle.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Éditeur Mermaid`;
+        previewToolbarTitle.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Rendu Visual`;
+        editor.placeholder = "Saisissez votre diagramme Mermaid ici (ex: graph TD\\n A --> B)...";
+      } else {
+        document.body.classList.remove('mermaid-mode');
+        currentToolText.textContent = 'MarkPDF';
+        taglineText.innerHTML = 'Markdown + Mermaid &rarr; PDF';
+        logoIconPdf.style.display = 'block';
+        logoIconPng.style.display = 'none';
+        actionBtnText.textContent = 'Télécharger le PDF';
+        editorToolbarTitle.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Éditeur Markdown`;
+        previewToolbarTitle.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Aperçu du Rendu`;
+        editor.placeholder = "Rédigez votre Markdown ici, ou déposez un fichier .md... Les blocs ```mermaid seront convertis automatiquement.";
+      }
+
+      // Restore or set sample content
+      const savedText = localStorage.getItem(`editor_content_${tool}`);
+      if (savedText && !resetContent) {
+        editor.value = savedText;
+      } else {
+        editor.value = SAMPLES[tool];
+      }
+
+      // Restore filename
+      const savedName = localStorage.getItem(`filename_${tool}`);
+      setFilename(savedName || (tool === 'markpdf' ? 'document' : 'diagramme'));
+      
+      renderPreview();
+    }
+
+    // ── Theme management ─────────────────────────────────────────────────────
+    themeBtn.addEventListener('click', () => {
+      const isDark = document.body.classList.toggle('dark-mode');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      updateThemeIcon(isDark);
+      showToast(isDark ? 'Mode sombre activé' : 'Mode clair activé', 'info');
+    });
+
+    function updateThemeIcon(isDark) {
+      if (isDark) {
+        themeBtn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="moon-icon"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`;
+      } else {
+        themeBtn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="sun-icon"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+      }
+    }
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+    function showToast(msg, type = 'success') {
+      clearTimeout(toastTimer);
+      toast.innerHTML = '';
+      
+      let icon = '';
+      if (type === 'success') {
+        icon = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
+      } else if (type === 'error') {
+        icon = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`;
+      } else {
+        icon = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>`;
+      }
+      
+      toast.innerHTML = `${icon}<span>${msg}</span>`;
+      toast.className = `show ${type}`;
+      toastTimer = setTimeout(() => { toast.className = ''; }, 3500);
+    }
+
+    // ── Live Preview ─────────────────────────────────────────────────────────
+    async function renderPreview() {
+      const md = editor.value;
+      localStorage.setItem(`editor_content_${activeTool}`, md);
+
+      if (!md.trim()) {
+        previewBody.innerHTML = '';
+        previewBody.appendChild(emptyState);
+        actionBtn.disabled = true;
+        return;
+      }
+
+      actionBtn.disabled = false;
+
+      if (activeTool === 'markpdf') {
+        // Markdown Mode
+        const html = marked.parse(md);
+        previewBody.innerHTML = html;
+
+        // Transform ```mermaid blocks
+        previewBody.querySelectorAll('pre code.language-mermaid').forEach(el => {
+          const div = document.createElement('div');
+          div.className = 'mermaid';
+          div.textContent = el.textContent;
+          el.closest('pre').replaceWith(div);
+        });
+
+        const mermaidNodes = Array.from(previewBody.querySelectorAll('.mermaid'));
+        if (mermaidNodes.length > 0) {
+          try {
+            await mermaid.run({ nodes: mermaidNodes });
+          } catch (e) {
+            console.warn('Mermaid preview error:', e.message);
+          }
+        }
+      } else {
+        // Mermaid PNG Mode (Direct input code rendering)
+        let mermaidCode = md.trim();
+        // Remove markdown tags if any
+        if (mermaidCode.startsWith('```mermaid')) {
+          mermaidCode = mermaidCode.replace(/^```mermaid\s*/, '').replace(/\s*```$/, '');
+        }
+        
+        previewBody.innerHTML = `<div class="mermaid" id="mermaid-render-target">${mermaidCode}</div>`;
+        const node = document.getElementById('mermaid-render-target');
+        
+        try {
+          // Clear any previous mermaid syntax errors
+          const oldErrors = document.querySelectorAll('.mermaid-error-container');
+          oldErrors.forEach(el => el.remove());
+          
+          await mermaid.run({ nodes: [node] });
+        } catch (e) {
+          console.warn('Mermaid layout error:', e.message);
+          previewBody.innerHTML = `<div class="mermaid-error-container"><strong>Erreur de Syntaxe Mermaid :</strong>\n${e.message}</div>`;
+        }
+      }
+    }
+
+    editor.addEventListener('input', () => {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(renderPreview, 300);
+    });
+
+    // ── Export/Action Button Routing ─────────────────────────────────────────
+    actionBtn.addEventListener('click', () => {
+      if (activeTool === 'mermaidpng') {
+        // Direct HD PNG download
+        downloadMermaidPng();
+      } else {
+        // Run local image scan first before opening config
+        const localImages = findLocalImages(editor.value);
+        if (localImages.length > 0) {
+          requiredImages = localImages;
+          openImageModal();
+        } else {
+          openPdfConfigModal();
+        }
+      }
+    });
+
+    // ── PDF Config Modal (MarkPDF) ───────────────────────────────────────────
+    function openPdfConfigModal() {
+      modalFilenameInput.value = currentFilename;
+      exportModal.classList.add('active');
+      modalFilenameInput.focus();
+      modalFilenameInput.select();
+    }
+
+    function closePdfModal() {
+      exportModal.classList.remove('active');
+    }
+
+    modalCloseX.addEventListener('click', closePdfModal);
+    modalCancelBtn.addEventListener('click', closePdfModal);
+    exportModal.addEventListener('click', (e) => {
+      if (e.target === exportModal) closePdfModal();
+    });
+
+    modalConfirmBtn.addEventListener('click', async () => {
+      const newFilename = modalFilenameInput.value.trim() || 'document';
+      setFilename(newFilename);
+      closePdfModal();
+      
+      await generatePdf();
+    });
+
+    // ── PDF Generation Logic (incorporating base64 images) ───────────────────
+    async function generatePdf() {
+      let mdContent = editor.value.trim();
+      if (!mdContent) return;
+
+      actionBtn.disabled = true;
+      loadingOverlay.classList.add('active');
+      document.getElementById('loading-title').textContent = "Génération du PDF...";
+      document.getElementById('loading-desc').textContent = "Rendu des diagrammes Mermaid et mise en page A4";
+
+      // Replace local image references in markdown with loaded base64 URLs
+      for (const [path, base64] of Object.entries(loadedImages)) {
+        mdContent = mdContent.split(path).join(base64);
+      }
+
+      try {
+        console.log('Envoi de la requête de génération PDF au serveur...');
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            markdown: mdContent,
+            filename: currentFilename,
+            includeHeaderFooter: modalHeaderFooter.checked
+          }),
+        });
+
+        if (response.status === 429) {
+          showToast('Une autre génération est en cours. File d\'attente active.', 'info');
+          return;
+        }
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          showToast(body.error || 'Erreur lors du traitement.', 'error');
+          return;
+        }
+
+        const blob = await response.blob();
+        if (blob.size < 100) {
+          showToast('Le PDF généré semble vide ou invalide.', 'error');
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentFilename}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('PDF téléchargé avec succès !', 'success');
+
+      } catch (err) {
+        console.error('Fetch error:', err);
+        showToast('Impossible de joindre le serveur.', 'error');
+      } finally {
+        actionBtn.disabled = false;
+        loadingOverlay.classList.remove('active');
+        
+        // Nettoyage temporaire des images chargées en mémoire
+        loadedImages = {};
+        console.log('Nettoyage du cache des images temporaires.');
+      }
+    }
+
+    // ── Local Images Scan & Resolution ───────────────────────────────────────
+    function findLocalImages(md) {
+      const local = new Set();
+      
+      // Match markdown: ![alt](path) - excluding remote and data links
+      const mdRegex = /!\[.*?\]\((?!https?:\/\/|data:)(.*?)\)/g;
+      let match;
+      while ((match = mdRegex.exec(md)) !== null) {
+        const path = match[1].trim();
+        if (path) local.add(path);
+      }
+      
+      // Match html tags: <img src="path">
+      const htmlRegex = /<img.*?src=["'](?!https?:\/\/|data:)(.*?)["']/g;
+      while ((match = htmlRegex.exec(md)) !== null) {
+        const path = match[1].trim();
+        if (path) local.add(path);
+      }
+      
+      return Array.from(local);
+    }
+
+    function openImageModal() {
+      updateImageModalUI();
+      imageModal.classList.add('active');
+    }
+
+    function closeImageModal() {
+      imageModal.classList.remove('active');
+      loadedImages = {}; // Reset matches
+    }
+
+    imageCloseX.addEventListener('click', closeImageModal);
+    imageCancelBtn.addEventListener('click', () => {
+      // User chose to skip loading local images, proceed to pdf options anyway
+      closeImageModal();
+      openPdfConfigModal();
+    });
+
+    imageConfirmBtn.addEventListener('click', () => {
+      // Proceed to PDF settings with base64 maps set
+      imageModal.classList.remove('active');
+      openPdfConfigModal();
+    });
+
+    // Helper to find index path of filename match (e.g. photo.jpg matches images/photo.jpg)
+    function findMatchingPath(fileName, requiredPaths) {
+      if (requiredPaths.includes(fileName)) return fileName;
+      return requiredPaths.find(path => {
+        const parts = path.split('/');
+        return parts[parts.length - 1] === fileName;
+      });
+    }
+
+    function handleImageFiles(files) {
+      let loadedCount = 0;
+      Array.from(files).forEach(file => {
+        const matchedPath = findMatchingPath(file.name, requiredImages);
+        if (matchedPath) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            loadedImages[matchedPath] = e.target.result;
+            loadedCount++;
+            if (loadedCount === files.length || Object.keys(loadedImages).length === requiredImages.length) {
+              updateImageModalUI();
+            }
+          };
+          reader.readAsDataURL(file);
+        } else {
+          showToast(`Image "${file.name}" non référencée dans le document.`, 'info');
+        }
+      });
+    }
+
+    function updateImageModalUI() {
+      missingImagesList.innerHTML = '';
+      let missingCount = 0;
+
+      requiredImages.forEach(path => {
+        const isLoaded = !!loadedImages[path];
+        if (!isLoaded) missingCount++;
+
+        const item = document.createElement('div');
+        item.className = 'missing-item';
+        
+        const pathParts = path.split('/');
+        const basename = pathParts[pathParts.length - 1];
+
+        item.innerHTML = `
+          <div class="missing-item-left" title="${path}">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            <span>${basename}</span>
+          </div>
+          <span class="status-badge ${isLoaded ? 'ready' : 'missing'}">${isLoaded ? 'Prêt' : 'Requis'}</span>
+        `;
+        missingImagesList.appendChild(item);
+      });
+
+      // Enable/Disable continue button
+      if (missingCount === 0) {
+        imageConfirmBtn.disabled = false;
+        imageConfirmBtn.textContent = "Continuer l'export";
+      } else {
+        imageConfirmBtn.disabled = true;
+        imageConfirmBtn.textContent = `En attente (${missingCount} manquantes)`;
+      }
+    }
+
+    // Image drag and drop inputs
+    imageDragZone.addEventListener('click', () => imageFileInput.click());
+    imageFileInput.addEventListener('change', () => {
+      if (imageFileInput.files.length > 0) {
+        handleImageFiles(imageFileInput.files);
+        imageFileInput.value = '';
+      }
+    });
+
+    imageDragZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      imageDragZone.classList.add('drag-over');
+    });
+    imageDragZone.addEventListener('dragleave', () => imageDragZone.classList.remove('drag-over'));
+    imageDragZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      imageDragZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        handleImageFiles(e.dataTransfer.files);
+      }
+    });
+
+    // ── MermaidPNG high quality Canvas Downloader ───────────────────────────
+    async function downloadMermaidPng() {
+      const svgEl = previewBody.querySelector('.mermaid svg');
+      if (!svgEl) {
+        showToast("Aucun diagramme Mermaid valide à exporter.", "error");
+        return;
+      }
+
+      loadingOverlay.classList.add('active');
+      document.getElementById('loading-title').textContent = "Génération de l'image...";
+      document.getElementById('loading-desc').textContent = "Conversion du diagramme SVG en image PNG Haute Définition";
+
+      try {
+        // Read native SVG viewBox values to calculate resolution
+        const width = svgEl.viewBox.baseVal.width || svgEl.width.baseVal.value || 800;
+        const height = svgEl.viewBox.baseVal.height || svgEl.height.baseVal.value || 600;
+        
+        // Render scale 3x for crisp retina display output
+        const scale = 3;
+        const canvasWidth = width * scale;
+        const canvasHeight = height * scale;
+
+        // Serialize the SVG to string
+        const svgString = new XMLSerializer().serializeToString(svgEl);
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const blobUrl = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvasWidth;
+          canvas.height = canvasHeight;
+          const ctx = canvas.getContext('2d');
+
+          // Clean transparent canvas drawing
+          ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+          ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+
+          // Get image format download
+          const pngUrl = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = pngUrl;
+          a.download = `${currentFilename}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          URL.revokeObjectURL(blobUrl);
+          showToast("PNG téléchargé avec succès !", "success");
+          loadingOverlay.classList.remove('active');
+        };
+
+        img.onerror = () => {
+          showToast("Erreur lors du rendu de l'image.", "error");
+          loadingOverlay.classList.remove('active');
+        };
+
+        img.src = blobUrl;
+
+      } catch (err) {
+        console.error(err);
+        showToast("Erreur lors de la conversion.", "error");
+        loadingOverlay.classList.remove('active');
+      }
+    }
+
+    // ── Upload general files ────────────────────────────────────────────────
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      loadFile(file);
+      fileInput.value = '';
+    });
+
+    function loadFile(file) {
+      if (file.size > 2_000_000) {
+        showToast('Fichier trop volumineux (max 2 Mo).', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        editor.value = e.target.result;
+        const nameCleaned = file.name.replace(/\.(md|txt|markdown|mermaid|mmd)$/i, '');
+        setFilename(nameCleaned);
+        renderPreview();
+        showToast('Fichier chargé avec succès', 'success');
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    function setFilename(name) {
+      currentFilename = name.replace(/[^a-zA-Z0-9\-_. ]/g, '_').trim() || 'document';
+      filenameDisplay.textContent = currentFilename;
+      filenameDisplay.title = currentFilename;
+      localStorage.setItem(`filename_${activeTool}`, currentFilename);
+    }
+
+    // ── Copy editor content ──────────────────────────────────────────────────
+    copyBtn.addEventListener('click', () => {
+      const text = editor.value;
+      if (!text) {
+        showToast('L\'éditeur est vide.', 'error');
+        return;
+      }
+      navigator.clipboard.writeText(text)
+        .then(() => showToast('Contenu copié dans le presse-papiers !', 'success'))
+        .catch(() => showToast('Erreur lors de la copie.', 'error'));
+    });
+
+    // ── Clear editor ─────────────────────────────────────────────────────────
+    clearBtn.addEventListener('click', () => {
+      if (editor.value && !confirm('Effacer tout le contenu de l\'éditeur ?')) return;
+      editor.value = '';
+      setFilename(activeTool === 'markpdf' ? 'document' : 'diagramme');
+      renderPreview();
+      showToast('Éditeur réinitialisé', 'info');
+    });
+
+    // ── Drag & Drop on Editor ────────────────────────────────────────────────
+    editor.addEventListener('dragover', e => {
+      e.preventDefault();
+      editor.classList.add('drag-over');
+    });
+    editor.addEventListener('dragleave', () => editor.classList.remove('drag-over'));
+    editor.addEventListener('drop', e => {
+      e.preventDefault();
+      editor.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
+  </script>
 </body>
 </html>

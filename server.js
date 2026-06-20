@@ -130,24 +130,119 @@ ${bodyHtml}
 </html>`;
 }
 
-// ─── Concurrency guard ────────────────────────────────────────────────────────
-let busy = false;
+// ─── Helpers & Memory logging ────────────────────────────────────────────────
+function logMemory(step) {
+    const mem = process.memoryUsage();
+    const toMB = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+    console.log(`[Memory Tracker] Step: ${step} | RSS: ${toMB(mem.rss)} | Heap: ${toMB(mem.heapUsed)} / ${toMB(mem.heapTotal)} | External: ${toMB(mem.external)}`);
+}
+
+// ─── Puppeteer Singleton & Lifecycle ─────────────────────────────────────────
+let browserInstance;
+let browserPromise;
+let browserUsageCount = 0;
+const MAX_BROWSER_USAGE = 50;
+
+async function getBrowser() {
+    if (browserInstance && browserUsageCount < MAX_BROWSER_USAGE) {
+        try {
+            await browserInstance.version();
+            return browserInstance;
+        } catch (e) {
+            console.log('Instance Puppeteer inactive ou fermée, recréation...');
+            await closeBrowser();
+        }
+    }
+
+    if (!browserPromise) {
+        console.log('Lancement d\'une nouvelle instance Puppeteer...');
+        logMemory('Before Puppeteer Launch');
+        browserPromise = puppeteer.launch({
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-accelerated-2d-canvas',
+                '--no-zygote',
+                '--disable-extensions',
+                '--disable-background-networking',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-breakpad',
+                '--disable-client-side-phishing-detection',
+                '--disable-default-apps',
+                '--disable-hang-monitor',
+                '--disable-popup-blocking',
+                '--disable-prompt-on-repost',
+                '--disable-sync',
+                '--metrics-recording-only',
+                '--mute-audio',
+            ],
+            headless: true,
+        }).then(b => {
+            browserInstance = b;
+            logMemory('After Puppeteer Launch');
+            return b;
+        }).catch(err => {
+            browserPromise = null;
+            throw err;
+        });
+    }
+
+    return browserPromise;
+}
+
+async function closeBrowser() {
+    if (browserInstance) {
+        try {
+            await browserInstance.close();
+        } catch (e) {}
+        browserInstance = null;
+    }
+    browserPromise = null;
+}
+
+// ─── Concurrency Queue ───────────────────────────────────────────────────────
+const queue = [];
+let activeGenerations = 0;
+const MAX_CONCURRENT_GENERATIONS = 3;
+
+function enqueuePdfGeneration(task) {
+    return new Promise((resolve, reject) => {
+        queue.push({ task, resolve, reject });
+        console.log(`Demande ajoutée à la file d'attente. Taille: ${queue.length}, Actives: ${activeGenerations}`);
+        processQueue();
+    });
+}
+
+function processQueue() {
+    if (activeGenerations >= MAX_CONCURRENT_GENERATIONS || queue.length === 0) {
+        return;
+    }
+    const { task, resolve, reject } = queue.shift();
+    activeGenerations++;
+    console.log(`Démarrage d'une génération. Actives: ${activeGenerations}, En attente: ${queue.length}`);
+    task()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+            activeGenerations--;
+            console.log(`Génération terminée. Actives: ${activeGenerations}`);
+            processQueue();
+        });
+}
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.post('/api/generate', async (req, res) => {
     console.log('Requête reçue pour générer un PDF');
+    logMemory('Start Generation Request');
 
-    if (busy) {
-        console.log('Une génération est déjà en cours');
-        return res.status(429).json({
-            error: 'Une génération est déjà en cours. Veuillez patienter quelques secondes.',
-        });
-    }
-
-    const { markdown, filename = 'document' } = req.body;
-    console.log('Contenu Markdown reçu, taille:', markdown.length);
+    const { markdown, filename = 'document', includeHeaderFooter = true } = req.body;
+    console.log('Contenu Markdown reçu, taille:', markdown ? markdown.length : 0);
 
     if (!markdown || typeof markdown !== 'string' || markdown.trim().length === 0) {
         console.log('Contenu Markdown vide ou invalide');
@@ -159,84 +254,119 @@ app.post('/api/generate', async (req, res) => {
         return res.status(400).json({ error: 'Document trop volumineux (max 5 Mo de texte).' });
     }
 
-    busy = true;
-    let browser;
+    // Wrap la logique de génération dans une tâche pour la file d'attente
+    const generationTask = async () => {
+        let page;
+        try {
+            const safeFilename = filename
+                .replace(/\.md$/i, '')
+                .replace(/[^a-zA-Z0-9\-_. ]/g, '_')
+                .trim() || 'document';
 
-    try {
-        const safeFilename = filename
-            .replace(/\.md$/i, '')
-            .replace(/[^a-zA-Z0-9\-_. ]/g, '_')
-            .trim() || 'document';
+            console.log('Conversion du Markdown en HTML...');
+            const bodyHtml = marked.parse(markdown);
+            const fullHtml = buildHtml(bodyHtml, safeFilename);
 
-        console.log('Conversion du Markdown en HTML...');
-        const bodyHtml = marked.parse(markdown);
-        const fullHtml = buildHtml(bodyHtml, safeFilename);
+            const browser = await getBrowser();
+            browserUsageCount++;
 
-        console.log('Lancement de Puppeteer...');
-        browser = await puppeteer.launch({
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-accelerated-2d-canvas',
-                '--no-zygote',
-            ],
-            headless: true,
+            console.log('Ouverture d\'un nouvel onglet...');
+            page = await browser.newPage();
+            page.on('console', msg => {
+                if (msg.type() === 'error') console.warn('[page]', msg.text());
+            });
+
+            console.log('Chargement du contenu HTML dans la page...');
+            try {
+                await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 45_000 });
+            } catch (navErr) {
+                console.warn('Timeout networkidle0, repli sur load:', navErr.message);
+                await page.setContent(fullHtml, { waitUntil: 'load', timeout: 20_000 });
+            }
+
+            logMemory('HTML Content Set');
+
+            console.log('Attente du rendu des diagrammes Mermaid...');
+            try {
+                await page.waitForFunction(
+                    () => {
+                        const all = document.querySelectorAll('div.mermaid');
+                        if (all.length === 0) return true;
+                        return document.querySelectorAll('div.mermaid svg').length >= all.length;
+                    },
+                    { timeout: 25_000, polling: 500 },
+                );
+            } catch (mermaidErr) {
+                console.warn('Timeout lors du rendu Mermaid, poursuite de la génération:', mermaidErr.message);
+            }
+
+            await new Promise(r => setTimeout(r, 600));
+            logMemory('Before PDF Generation');
+
+            console.log('Génération du PDF...');
+            const pdfUint8Array = await page.pdf({
+                format: 'A4',
+                printBackground: true,
+                margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
+                displayHeaderFooter: !!includeHeaderFooter,
+                headerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-top:4px;font-family:sans-serif;">${safeFilename}</div>`,
+                footerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
+            });
+
+            // Convertir Uint8Array en Buffer Node.js
+            const pdfBuffer = Buffer.from(pdfUint8Array);
+            console.log('Taille du PDF généré:', pdfBuffer.length, 'octets');
+
+            // Garde-fou
+            const isValidPdf = Buffer.isBuffer(pdfBuffer) &&
+                pdfBuffer.length > 100 &&
+                pdfBuffer.subarray(0, 5).toString('latin1') === '%PDF-';
+
+            if (!isValidPdf) {
+                throw new Error('Le buffer généré par Puppeteer ne correspond pas à un PDF valide (génération corrompue).');
+            }
+
+            // Sauvegarder temporairement
+            const tempPdfPath = `/tmp/${safeFilename}.pdf`;
+            try {
+                fs.writeFileSync(tempPdfPath, pdfBuffer);
+                console.log('PDF sauvegardé temporairement:', tempPdfPath);
+            } catch (fsErr) {}
+
+            return { pdfBuffer, safeFilename };
+        } finally {
+            if (page) {
+                console.log('Fermeture de l\'onglet...');
+                await page.close().catch(() => {});
+            }
+        }
+    };
+
+    // Lancer la tâche via la file d'attente
+    enqueuePdfGeneration(generationTask)
+        .then(({ pdfBuffer, safeFilename }) => {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
+            res.setHeader('Content-Length', pdfBuffer.length);
+            console.log('Envoi du PDF au client...');
+            res.send(pdfBuffer);
+        })
+        .catch((err) => {
+            console.error('Erreur lors de la génération du PDF:', err);
+            res.status(500).json({ error: 'Erreur lors de la génération du PDF : ' + err.message });
         });
+});
 
-        const page = await browser.newPage();
-        page.on('console', msg => {
-            if (msg.type() === 'error') console.warn('[page]', msg.text());
-        });
-
-        console.log('Chargement du contenu HTML dans la page...');
-        await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 120_000 });
-
-        console.log('Attente du rendu des diagrammes Mermaid...');
-        await page.waitForFunction(
-            () => {
-                const all = document.querySelectorAll('div.mermaid');
-                if (all.length === 0) return true;
-                return document.querySelectorAll('div.mermaid svg').length >= all.length;
-            },
-            { timeout: 60_000, polling: 500 },
-        );
-
-        await new Promise(r => setTimeout(r, 1000));
-
-        console.log('Génération du PDF...');
-        const pdfBuffer = await page.pdf({
-            format: 'A4',
-            printBackground: true,
-            margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
-            displayHeaderFooter: true,
-            headerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-top:4px;font-family:sans-serif;">${safeFilename}</div>`,
-            footerTemplate: `<div style="font-size:9px;color:#999;width:100%;text-align:center;padding-bottom:4px;font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`,
-        });
-
-        console.log('Taille du PDF généré:', pdfBuffer.length, 'octets');
-        console.log('Premiers octets du PDF:', pdfBuffer.slice(0, 50).toString('hex'));
-
-        // Sauvegarder le PDF temporairement pour vérification
-        const tempPdfPath = `/tmp/${safeFilename}.pdf`;
-        fs.writeFileSync(tempPdfPath, pdfBuffer);
-        console.log('PDF sauvegardé temporairement:', tempPdfPath);
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
-        res.setHeader('Content-Length', pdfBuffer.length);
-        console.log('Envoi du PDF au client...');
-        res.send(pdfBuffer);
-    } catch (err) {
-        console.error('Erreur lors de la génération du PDF:', err);
-        res.status(500).json({ error: 'Erreur lors de la génération du PDF. Veuillez réessayer.' });
-    } finally {
-        if (browser) await browser.close().catch(() => {});
-        busy = false;
-        console.log('Génération terminée');
-    }
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM reçu. Fermeture de Puppeteer...');
+    await closeBrowser();
+    process.exit(0);
+});
+process.on('SIGINT', async () => {
+    console.log('SIGINT reçu. Fermeture de Puppeteer...');
+    await closeBrowser();
+    process.exit(0);
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
