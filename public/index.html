@@ -925,11 +925,11 @@
     }
     #css-editor::placeholder { color: var(--text-muted); opacity: 0.5; }
 
-    /* ── Template Selector Dropdown ─────────────────────────────── */
-    .template-selector-container {
+    /* ── Template & Diagram Style Selector Dropdowns ──────────────── */
+    .template-selector-container, .mermaid-style-container {
       position: relative;
     }
-    .template-dropdown {
+    .template-dropdown, .mermaid-style-dropdown {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
@@ -946,10 +946,10 @@
       gap: 2px;
       animation: dropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .template-dropdown.active {
+    .template-dropdown.active, .mermaid-style-dropdown.active {
       display: flex;
     }
-    .template-dropdown-item {
+    .template-dropdown-item, .mermaid-style-dropdown-item {
       padding: 8px 12px;
       display: flex;
       flex-direction: column;
@@ -961,22 +961,40 @@
       border-radius: var(--radius-sm);
       text-align: left;
     }
-    .template-dropdown-item:hover {
+    .template-dropdown-item:hover, .mermaid-style-dropdown-item:hover {
       background: var(--panel-header);
     }
-    .template-dropdown-item.active {
+    .template-dropdown-item.active, .mermaid-style-dropdown-item.active {
       background: var(--accent-light);
       color: var(--accent);
     }
-    .template-dropdown-item strong {
+    .template-dropdown-item strong, .mermaid-style-dropdown-item strong {
       font-size: 13px;
       font-weight: 700;
     }
-    .template-dropdown-item span {
+    .template-dropdown-item span, .mermaid-style-dropdown-item span {
       font-size: 11px;
       color: var(--text-muted);
       opacity: 0.8;
       margin-top: 1px;
+    }
+
+    .form-select {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--panel-header);
+      padding: 0 12px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: var(--transition);
+      cursor: pointer;
+    }
+    .form-select:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-light);
     }
 
     /* ── Scrollbars ──────────────────────────────────────────────── */
@@ -1137,6 +1155,42 @@
               </div>
             </div>
           </div>
+
+          <!-- Dropdown diagram style selector -->
+          <div class="mermaid-style-container" id="mermaid-style-container">
+            <button class="btn btn-secondary" id="mermaid-style-trigger" title="Choisir le style du diagramme">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <span id="current-mermaid-style-text">Style : Moderne Épuré</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="mermaid-style-dropdown" id="mermaid-style-dropdown-menu">
+              <div class="mermaid-style-dropdown-item active" data-style="default">
+                <strong>Moderne Épuré</strong>
+                <span>Style Mermaid par défaut</span>
+              </div>
+              <div class="mermaid-style-dropdown-item" data-style="classicUml">
+                <strong>UML Classique</strong>
+                <span>Fond crème et bordures nettes</span>
+              </div>
+              <div class="mermaid-style-dropdown-item" data-style="proUml">
+                <strong>UML Professionnel</strong>
+                <span>Gris / Bleu moderne</span>
+              </div>
+              <div class="mermaid-style-dropdown-item" data-style="academicUml">
+                <strong>UML Épuré</strong>
+                <span>Monochrome (Noir & Blanc)</span>
+              </div>
+              <div class="mermaid-style-dropdown-item" data-style="darkUml">
+                <strong>Mode Sombre Tech</strong>
+                <span>Thème sombre adapté</span>
+              </div>
+              <div class="mermaid-style-dropdown-item" data-style="wicra">
+                <strong>Style Wicra</strong>
+                <span>Orange et typographie soignée</span>
+              </div>
+            </div>
+          </div>
+
           <button class="btn btn-primary" id="action-btn" disabled>
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
             <span id="action-btn-text">Télécharger le PDF</span>
@@ -1181,6 +1235,48 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="modal-cancel-btn">Annuler</button>
         <button class="btn btn-primary" id="modal-confirm-btn">Générer & Télécharger</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Export Settings Modal (MermaidPNG) ─────────────────────────────── -->
+  <div class="modal-overlay" id="png-export-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Configuration de l'export PNG</h3>
+        <button class="modal-close" id="png-modal-close-x">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="png-modal-filename-input">Nom du document</label>
+          <div class="input-group">
+            <input type="text" id="png-modal-filename-input" placeholder="nom-du-diagramme" autocomplete="off">
+            <span class="input-suffix">.png</span>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="png-modal-format-select">Format de l'image (Canvas)</label>
+          <select id="png-modal-format-select" class="form-select">
+            <option value="fit" selected>Ajusté au diagramme (Taille minimale)</option>
+            <option value="landscape-16-9">Paysage (16:9) - Présentation / Écran</option>
+            <option value="landscape-4-3">Paysage (4:3) - Document / Diaporama</option>
+            <option value="landscape-a4">Paysage (A4) - Impression A4 horizontal</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="png-modal-bg-select">Arrière-plan de l'export</label>
+          <select id="png-modal-bg-select" class="form-select">
+            <option value="transparent">Transparent</option>
+            <option value="white">Blanc uni</option>
+            <option value="theme" selected>Couleur du style actuel</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="png-modal-cancel-btn">Annuler</button>
+        <button class="btn btn-primary" id="png-modal-confirm-btn">Télécharger le PNG</button>
       </div>
     </div>
   </div>
@@ -1280,6 +1376,13 @@
     const templateMenu        = document.getElementById('template-dropdown-menu');
     const templateItems       = document.querySelectorAll('.template-dropdown-item');
     const currentTemplateText = document.getElementById('current-template-text');
+    
+    // Mermaid Style elements
+    const mermaidStyleTrigger     = document.getElementById('mermaid-style-trigger');
+    const mermaidStyleMenu        = document.getElementById('mermaid-style-dropdown-menu');
+    const mermaidStyleItems       = document.querySelectorAll('.mermaid-style-dropdown-item');
+    const currentMermaidStyleText = document.getElementById('current-mermaid-style-text');
+    const mermaidStyleContainer   = document.getElementById('mermaid-style-container');
 
     // PDF Export Modal elements
     const exportModal     = document.getElementById('export-modal');
@@ -1289,6 +1392,15 @@
     const modalCancelBtn  = document.getElementById('modal-cancel-btn');
     const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 
+    // PNG Export Modal elements
+    const pngExportModal          = document.getElementById('png-export-modal');
+    const pngModalFilenameInput   = document.getElementById('png-modal-filename-input');
+    const pngModalFormatSelect    = document.getElementById('png-modal-format-select');
+    const pngModalBgSelect        = document.getElementById('png-modal-bg-select');
+    const pngModalCloseX          = document.getElementById('png-modal-close-x');
+    const pngModalCancelBtn       = document.getElementById('png-modal-cancel-btn');
+    const pngModalConfirmBtn      = document.getElementById('png-modal-confirm-btn');
+
     // Image Modal elements
     const imageModal        = document.getElementById('image-modal');
     const missingImagesList = document.getElementById('missing-images-list');
@@ -1297,6 +1409,172 @@
     const imageCloseX       = document.getElementById('image-modal-close-x');
     const imageCancelBtn    = document.getElementById('image-modal-cancel-btn');
     const imageConfirmBtn   = document.getElementById('image-modal-confirm-btn');
+
+    // ── Mermaid Styles configuration ────────────────────────────────────────
+    let currentMermaidStyle = localStorage.getItem('mermaid_style') || 'default';
+
+    const MERMAID_STYLES = {
+      default: {
+        theme: 'default',
+        name: 'Moderne Épuré',
+        bg: '#ffffff',
+      },
+      classicUml: {
+        theme: 'base',
+        name: 'UML Classique',
+        bg: '#fffbeb',
+        themeVariables: {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '14px',
+          nodeBorder: '#111827',
+          nodeBkg: '#fffbeb',
+          mainBkg: '#fffbeb',
+          textColor: '#111827',
+          lineColor: '#374151',
+          edgeLabelBackground: '#ffffff',
+          actorBorder: '#111827',
+          actorBkg: '#fffbeb',
+          actorTextColor: '#111827',
+          actorLineColor: '#374151',
+          signalColor: '#111827',
+          signalTextColor: '#111827',
+          labelBoxBkgColor: '#fffbeb',
+          labelBoxBorderColor: '#111827',
+          labelTextColor: '#111827',
+          loopLimitBorderColor: '#111827',
+          loopLimitBkgColor: '#fffbeb',
+          classBorder: '#111827',
+          classBkg: '#fffbeb',
+          classText: '#111827',
+          classLabelRectBkgColor: '#fffbeb',
+          classLabelRectBorderColor: '#111827',
+          classLabelTextColor: '#111827',
+          stateBorder: '#111827',
+          stateBkg: '#fffbeb',
+          transitionColor: '#374151',
+          transitionLabelColor: '#111827',
+          attributeBackend: '#fffbeb',
+          attributeBorder: '#111827',
+          activeCharcoal: '#111827'
+        }
+      },
+      proUml: {
+        theme: 'base',
+        name: 'UML Professionnel',
+        bg: '#f8fafc',
+        themeVariables: {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '14px',
+          nodeBorder: '#334155',
+          nodeBkg: '#f8fafc',
+          mainBkg: '#f8fafc',
+          textColor: '#0f172a',
+          lineColor: '#64748b',
+          edgeLabelBackground: '#ffffff',
+          actorBorder: '#334155',
+          actorBkg: '#f8fafc',
+          actorTextColor: '#0f172a',
+          actorLineColor: '#64748b',
+          signalColor: '#0f172a',
+          signalTextColor: '#0f172a',
+          labelBoxBkgColor: '#f8fafc',
+          labelBoxBorderColor: '#334155',
+          labelTextColor: '#0f172a',
+          classBorder: '#334155',
+          classBkg: '#f8fafc',
+          classText: '#0f172a',
+          classLabelRectBkgColor: '#f8fafc',
+          classLabelRectBorderColor: '#334155',
+          classLabelTextColor: '#0f172a',
+          stateBorder: '#334155',
+          stateBkg: '#f8fafc',
+          transitionColor: '#64748b',
+          transitionLabelColor: '#0f172a',
+          attributeBackend: '#f8fafc',
+          attributeBorder: '#334155',
+          activeCharcoal: '#0f172a'
+        }
+      },
+      academicUml: {
+        theme: 'base',
+        name: 'UML Épuré',
+        bg: '#ffffff',
+        themeVariables: {
+          fontFamily: 'Georgia, serif',
+          fontSize: '14px',
+          nodeBorder: '#000000',
+          nodeBkg: '#ffffff',
+          mainBkg: '#ffffff',
+          textColor: '#000000',
+          lineColor: '#000000',
+          edgeLabelBackground: '#ffffff',
+          actorBorder: '#000000',
+          actorBkg: '#ffffff',
+          actorTextColor: '#000000',
+          actorLineColor: '#000000',
+          signalColor: '#000000',
+          signalTextColor: '#000000',
+          labelBoxBkgColor: '#ffffff',
+          labelBoxBorderColor: '#000000',
+          labelTextColor: '#000000',
+          classBorder: '#000000',
+          classBkg: '#ffffff',
+          classText: '#000000',
+          classLabelRectBkgColor: '#ffffff',
+          classLabelRectBorderColor: '#000000',
+          classLabelTextColor: '#000000',
+          stateBorder: '#000000',
+          stateBkg: '#ffffff',
+          transitionColor: '#000000',
+          transitionLabelColor: '#000000',
+          attributeBackend: '#ffffff',
+          attributeBorder: '#000000',
+          activeCharcoal: '#000000'
+        }
+      },
+      darkUml: {
+        theme: 'dark',
+        name: 'Mode Sombre Tech',
+        bg: '#0f172a',
+      },
+      wicra: {
+        theme: 'base',
+        name: 'Wicra Orange',
+        bg: '#fffbf9',
+        themeVariables: {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '14px',
+          nodeBorder: '#e8570a',
+          nodeBkg: '#fffbf9',
+          mainBkg: '#fffbf9',
+          textColor: '#444444',
+          lineColor: '#e8570a',
+          edgeLabelBackground: '#ffffff',
+          actorBorder: '#e8570a',
+          actorBkg: '#fffbf9',
+          actorTextColor: '#444444',
+          actorLineColor: '#e8570a',
+          signalColor: '#e8570a',
+          signalTextColor: '#444444',
+          labelBoxBkgColor: '#fffbf9',
+          labelBoxBorderColor: '#e8570a',
+          labelTextColor: '#444444',
+          classBorder: '#e8570a',
+          classBkg: '#fffbf9',
+          classText: '#444444',
+          classLabelRectBkgColor: '#fffbf9',
+          classLabelRectBorderColor: '#e8570a',
+          classLabelTextColor: '#444444',
+          stateBorder: '#e8570a',
+          stateBkg: '#fffbf9',
+          transitionColor: '#e8570a',
+          transitionLabelColor: '#444444',
+          attributeBackend: '#fffbf9',
+          attributeBorder: '#e8570a',
+          activeCharcoal: '#444444'
+        }
+      }
+    };
 
     // ── PDF Templates CSS ────────────────────────────────────────────────────
     const PDF_TEMPLATES = {
@@ -2114,11 +2392,15 @@ Vous pouvez également faire référence à des images locales :
     // ── Tool Switcher Menu ───────────────────────────────────────────────────
     toolTrigger.addEventListener('click', (e) => {
       e.stopPropagation();
+      templateMenu.classList.remove('active');
+      mermaidStyleMenu.classList.remove('active');
       toolMenu.classList.toggle('active');
     });
 
     document.addEventListener('click', () => {
       toolMenu.classList.remove('active');
+      templateMenu.classList.remove('active');
+      mermaidStyleMenu.classList.remove('active');
     });
 
     toolItems.forEach(item => {
@@ -2281,7 +2563,9 @@ Vous pouvez également faire référence à des images locales :
           templateStyle.textContent = PDF_TEMPLATES[currentTemplate] || '';
         }
         if (customStyle) {
-          customStyle.textContent = customCss || '';
+          const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+          const styleBgOverride = `.mermaid svg { background: ${activeStyle.bg} !important; }`;
+          customStyle.textContent = (customCss || '') + '\n' + styleBgOverride;
         }
 
         // Sync background color of html with body to ensure seamless A4 margins
@@ -2343,11 +2627,9 @@ Vous pouvez également faire référence à des images locales :
     // ── Template Dropdown Management ─────────────────────────────────────────
     templateTrigger.addEventListener('click', (e) => {
       e.stopPropagation();
+      toolMenu.classList.remove('active');
+      mermaidStyleMenu.classList.remove('active');
       templateMenu.classList.toggle('active');
-    });
-
-    document.addEventListener('click', () => {
-      templateMenu.classList.remove('active');
     });
 
     templateItems.forEach(item => {
@@ -2356,6 +2638,16 @@ Vous pouvez également faire référence à des images locales :
         selectTemplate(template);
       });
     });
+
+    const TEMPLATE_TO_MERMAID_STYLE = {
+      classic: 'default',
+      notion: 'proUml',
+      stripe: 'proUml',
+      latex: 'academicUml',
+      medium: 'proUml',
+      github: 'academicUml',
+      wicra: 'wicra'
+    };
 
     function selectTemplate(template) {
       currentTemplate = template;
@@ -2368,7 +2660,53 @@ Vous pouvez également faire référence à des images locales :
         currentTemplateText.textContent = activeItem.querySelector('strong').textContent;
       }
       
+      // Automatically adapt Mermaid styles to match the selected PDF template style
+      const matchingStyle = TEMPLATE_TO_MERMAID_STYLE[template] || 'default';
+      selectMermaidStyle(matchingStyle);
+    }
+
+    // ── Mermaid Style Dropdown Management ────────────────────────────────────
+    mermaidStyleTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toolMenu.classList.remove('active');
+      templateMenu.classList.remove('active');
+      mermaidStyleMenu.classList.toggle('active');
+    });
+
+    mermaidStyleItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const style = item.getAttribute('data-style');
+        selectMermaidStyle(style);
+      });
+    });
+
+    function selectMermaidStyle(style) {
+      currentMermaidStyle = style;
+      localStorage.setItem('mermaid_style', style);
+      
+      mermaidStyleItems.forEach(i => i.classList.remove('active'));
+      const activeItem = document.querySelector(`.mermaid-style-dropdown-item[data-style="${style}"]`);
+      if (activeItem) {
+        activeItem.classList.add('active');
+        currentMermaidStyleText.textContent = `Style : ${activeItem.querySelector('strong').textContent}`;
+      }
+      
+      updateMermaidStyleCss();
       updateIframeStyles();
+      renderPreview();
+    }
+
+    function updateMermaidStyleCss() {
+      const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+      let styleOverride = document.getElementById('mermaid-style-override');
+      if (!styleOverride) {
+        styleOverride = document.createElement('style');
+        styleOverride.id = 'mermaid-style-override';
+        document.head.appendChild(styleOverride);
+      }
+      styleOverride.textContent = `
+        #preview-body .mermaid svg { background: ${activeStyle.bg} !important; }
+      `;
     }
 
     // ── Live Preview ─────────────────────────────────────────────────────────
@@ -2415,6 +2753,18 @@ Vous pouvez également faire référence à des images locales :
         if (mermaidNodes.length > 0) {
           const runMermaid = () => {
             if (previewIframe.contentWindow && previewIframe.contentWindow.mermaid && typeof previewIframe.contentWindow.mermaid.run === 'function') {
+              const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+              const config = {
+                startOnLoad: false,
+                theme: activeStyle.theme,
+                securityLevel: 'loose',
+                flowchart: { useMaxWidth: true, htmlLabels: true },
+                sequence: { useMaxWidth: true },
+              };
+              if (activeStyle.themeVariables) {
+                config.themeVariables = activeStyle.themeVariables;
+              }
+              previewIframe.contentWindow.mermaid.initialize(config);
               previewIframe.contentWindow.mermaid.run({ nodes: mermaidNodes })
                 .then(resizeIframe)
                 .catch(e => {
@@ -2448,6 +2798,19 @@ Vous pouvez également faire référence à des images locales :
           const oldErrors = document.querySelectorAll('.mermaid-error-container');
           oldErrors.forEach(el => el.remove());
           
+          const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+          const config = {
+            startOnLoad: false,
+            theme: activeStyle.theme,
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true },
+            sequence: { useMaxWidth: true },
+          };
+          if (activeStyle.themeVariables) {
+            config.themeVariables = activeStyle.themeVariables;
+          }
+          mermaid.initialize(config);
+          
           await mermaid.run({ nodes: [node] });
         } catch (e) {
           console.warn('Mermaid layout error:', e.message);
@@ -2466,8 +2829,7 @@ Vous pouvez également faire référence à des images locales :
     // ── Export/Action Button Routing ─────────────────────────────────────────
     actionBtn.addEventListener('click', () => {
       if (activeTool === 'mermaidpng') {
-        // Direct HD PNG download
-        downloadMermaidPng();
+        openPngConfigModal();
       } else {
         // Run local image scan first before opening config
         const localImages = findLocalImages(editor.value);
@@ -2506,6 +2868,35 @@ Vous pouvez également faire référence à des images locales :
       await generatePdf();
     });
 
+    // ── PNG Config Modal (MermaidPNG) ─────────────────────────────────────────
+    function openPngConfigModal() {
+      pngModalFilenameInput.value = currentFilename;
+      pngExportModal.classList.add('active');
+      pngModalFilenameInput.focus();
+      pngModalFilenameInput.select();
+    }
+
+    function closePngModal() {
+      pngExportModal.classList.remove('active');
+    }
+
+    pngModalCloseX.addEventListener('click', closePngModal);
+    pngModalCancelBtn.addEventListener('click', closePngModal);
+    pngExportModal.addEventListener('click', (e) => {
+      if (e.target === pngExportModal) closePngModal();
+    });
+
+    pngModalConfirmBtn.addEventListener('click', () => {
+      const newFilename = pngModalFilenameInput.value.trim() || 'diagramme';
+      setFilename(newFilename);
+      
+      const format = pngModalFormatSelect.value;
+      const bgOption = pngModalBgSelect.value;
+      
+      closePngModal();
+      downloadMermaidPng(newFilename, format, bgOption);
+    });
+
     // ── PDF Generation Logic (incorporating base64 images) ───────────────────
     async function generatePdf() {
       let mdContent = editor.value.trim();
@@ -2528,6 +2919,9 @@ Vous pouvez également faire référence à des images locales :
           footerTemplate = `<div style="font-size:8px;color:#444444;width:100%;font-family:sans-serif;display:flex;flex-direction:column;align-items:flex-end;padding:0 15mm;box-sizing:border-box;"><div style="width:100%;border-top:0.5px solid #dddddd;margin-bottom:6px;"></div><div>Page <span class="pageNumber"></span></div></div>`;
         }
 
+        const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+        const styleBgOverride = `.mermaid svg { background: ${activeStyle.bg} !important; }`;
+        
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2536,8 +2930,10 @@ Vous pouvez également faire référence à des images locales :
             filename: currentFilename,
             includeHeaderFooter: modalHeaderFooter.checked,
             templateCss: PDF_TEMPLATES[currentTemplate] || '',
-            customCss: customCss || '',
-            footerTemplate: footerTemplate
+            customCss: (customCss || '') + '\n' + styleBgOverride,
+            footerTemplate: footerTemplate,
+            mermaidTheme: activeStyle.theme,
+            mermaidThemeVariables: activeStyle.themeVariables || null
           }),
         });
 
@@ -2712,7 +3108,7 @@ Vous pouvez également faire référence à des images locales :
     });
 
     // ── MermaidPNG high quality Canvas Downloader ───────────────────────────
-    async function downloadMermaidPng() {
+    async function downloadMermaidPng(filename, format = 'fit', bgOption = 'theme') {
       const svgEl = previewBody.querySelector('.mermaid svg');
       if (!svgEl) {
         showToast("Aucun diagramme Mermaid valide à exporter.", "error");
@@ -2725,13 +3121,58 @@ Vous pouvez également faire référence à des images locales :
 
       try {
         // Read native SVG viewBox values to calculate resolution
-        const width = svgEl.viewBox.baseVal.width || svgEl.width.baseVal.value || 800;
-        const height = svgEl.viewBox.baseVal.height || svgEl.height.baseVal.value || 600;
+        const diagramWidth = svgEl.viewBox.baseVal.width || svgEl.width.baseVal.value || 800;
+        const diagramHeight = svgEl.viewBox.baseVal.height || svgEl.height.baseVal.value || 600;
         
+        // Define targets based on requested format
+        let targetRatio = null;
+        if (format === 'landscape-16-9') {
+          targetRatio = 16 / 9;
+        } else if (format === 'landscape-4-3') {
+          targetRatio = 4 / 3;
+        } else if (format === 'landscape-a4') {
+          targetRatio = 297 / 210; // A4 landscape aspect ratio
+        }
+
+        let canvasWidth, canvasHeight;
+        let drawX = 0, drawY = 0;
+        let drawWidth = diagramWidth;
+        let drawHeight = diagramHeight;
+
+        if (targetRatio) {
+          // Landscape mode: center diagram in canvas
+          // Add padding (diagram occupies max 80% of canvas width or height)
+          const paddingFactor = 0.8;
+          const currentRatio = diagramWidth / diagramHeight;
+
+          if (currentRatio > targetRatio) {
+            // Limited by width
+            canvasWidth = diagramWidth / paddingFactor;
+            canvasHeight = canvasWidth / targetRatio;
+          } else {
+            // Limited by height
+            canvasHeight = diagramHeight / paddingFactor;
+            canvasWidth = canvasHeight * targetRatio;
+          }
+
+          drawWidth = diagramWidth;
+          drawHeight = diagramHeight;
+          drawX = (canvasWidth - drawWidth) / 2;
+          drawY = (canvasHeight - drawHeight) / 2;
+        } else {
+          // 'fit' mode
+          canvasWidth = diagramWidth;
+          canvasHeight = diagramHeight;
+        }
+
         // Render scale 3x for crisp retina display output
         const scale = 3;
-        const canvasWidth = width * scale;
-        const canvasHeight = height * scale;
+        const scaledCanvasWidth = canvasWidth * scale;
+        const scaledCanvasHeight = canvasHeight * scale;
+        const scaledDrawWidth = drawWidth * scale;
+        const scaledDrawHeight = drawHeight * scale;
+        const scaledDrawX = drawX * scale;
+        const scaledDrawY = drawY * scale;
 
         // Serialize the SVG to string
         const svgString = new XMLSerializer().serializeToString(svgEl);
@@ -2742,19 +3183,35 @@ Vous pouvez également faire référence à des images locales :
         img.crossOrigin = 'anonymous';
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          canvas.width = canvasWidth;
-          canvas.height = canvasHeight;
+          canvas.width = scaledCanvasWidth;
+          canvas.height = scaledCanvasHeight;
           const ctx = canvas.getContext('2d');
 
-          // Clean transparent canvas drawing
-          ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-          ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+          // Determine background color
+          let bgColor = 'transparent';
+          if (bgOption === 'white') {
+            bgColor = '#ffffff';
+          } else if (bgOption === 'theme') {
+            const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+            bgColor = activeStyle.bg || '#ffffff';
+          }
+
+          // Draw background
+          if (bgColor !== 'transparent') {
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, scaledCanvasWidth, scaledCanvasHeight);
+          } else {
+            ctx.clearRect(0, 0, scaledCanvasWidth, scaledCanvasHeight);
+          }
+
+          // Draw centered / scaled diagram
+          ctx.drawImage(img, scaledDrawX, scaledDrawY, scaledDrawWidth, scaledDrawHeight);
 
           // Get image format download
           const pngUrl = canvas.toDataURL('image/png');
           const a = document.createElement('a');
           a.href = pngUrl;
-          a.download = `${currentFilename}.png`;
+          a.download = `${filename}.png`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -2881,6 +3338,9 @@ Vous pouvez également faire référence à des images locales :
 
     // Select stored template
     selectTemplate(currentTemplate);
+
+    // Select stored Mermaid Style
+    selectMermaidStyle(currentMermaidStyle);
 
     // Load active tool and run initial rendering
     activeTool = localStorage.getItem('active_tool') || 'markpdf';

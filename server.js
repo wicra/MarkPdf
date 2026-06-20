@@ -100,8 +100,9 @@ h2 { page-break-before: auto; }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function buildHtml(bodyHtml, title, templateCss, customCss) {
+function buildHtml(bodyHtml, title, templateCss, customCss, mermaidTheme = 'default', mermaidThemeVariables = null) {
     const activeTemplateCss = templateCss || PDF_STYLE;
+    const themeVarsString = mermaidThemeVariables ? JSON.stringify(mermaidThemeVariables) : 'null';
     return `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -120,13 +121,18 @@ ${bodyHtml}
         div.textContent = el.textContent;
         el.closest('pre').replaceWith(div);
     });
-    mermaid.initialize({
+    const mermaidConfig = {
         startOnLoad: true,
-        theme: 'default',
+        theme: '${mermaidTheme}',
         securityLevel: 'loose',
         flowchart: { useMaxWidth: true, htmlLabels: true },
         sequence: { useMaxWidth: true },
-    });
+    };
+    const themeVars = ${themeVarsString};
+    if (themeVars) {
+        mermaidConfig.themeVariables = themeVars;
+    }
+    mermaid.initialize(mermaidConfig);
 </script>
 </body>
 </html>`;
@@ -243,7 +249,7 @@ app.post('/api/generate', async (req, res) => {
     console.log('Requête reçue pour générer un PDF');
     logMemory('Start Generation Request');
 
-    const { markdown, filename = 'document', includeHeaderFooter = true, templateCss = '', customCss = '', footerTemplate = '', headerTemplate = '' } = req.body;
+    const { markdown, filename = 'document', includeHeaderFooter = true, templateCss = '', customCss = '', footerTemplate = '', headerTemplate = '', mermaidTheme = 'default', mermaidThemeVariables = null } = req.body;
     console.log('Contenu Markdown reçu, taille:', markdown ? markdown.length : 0);
 
     if (!markdown || typeof markdown !== 'string' || markdown.trim().length === 0) {
@@ -267,7 +273,7 @@ app.post('/api/generate', async (req, res) => {
 
             console.log('Conversion du Markdown en HTML...');
             const bodyHtml = marked.parse(markdown);
-            const fullHtml = buildHtml(bodyHtml, safeFilename, templateCss, customCss);
+            const fullHtml = buildHtml(bodyHtml, safeFilename, templateCss, customCss, mermaidTheme, mermaidThemeVariables);
 
             const browser = await getBrowser();
             browserUsageCount++;
