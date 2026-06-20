@@ -2754,6 +2754,14 @@ Vous pouvez également faire référence à des images locales :
           const runMermaid = () => {
             if (previewIframe.contentWindow && previewIframe.contentWindow.mermaid && typeof previewIframe.contentWindow.mermaid.run === 'function') {
               const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+              // Reset cached theme variables to prevent color leaks between style selections
+              try {
+                const currentConfig = previewIframe.contentWindow.mermaid.getConfig();
+                if (currentConfig) {
+                  delete currentConfig.themeVariables;
+                }
+              } catch (e) {}
+
               const config = {
                 startOnLoad: false,
                 theme: activeStyle.theme,
@@ -2799,6 +2807,14 @@ Vous pouvez également faire référence à des images locales :
           oldErrors.forEach(el => el.remove());
           
           const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+          // Reset cached theme variables to prevent color leaks between style selections
+          try {
+            const currentConfig = mermaid.getConfig();
+            if (currentConfig) {
+              delete currentConfig.themeVariables;
+            }
+          } catch (e) {}
+
           const config = {
             startOnLoad: false,
             theme: activeStyle.theme,
