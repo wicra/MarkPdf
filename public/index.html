@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MarkPDF — Convertisseur Markdown + Mermaid & PNG</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2261,38 +2262,44 @@ h2 { page-break-before: auto; }
 
     // Load active styles
     let currentTemplate = localStorage.getItem('pdf_template') || 'classic';
-    let customCss = localStorage.getItem('pdf_custom_css') || `/* 
+    let customCss = localStorage.getItem('pdf_custom_css') || `/*
 === TUTORIEL : PERSONNALISATION CSS DE VOTRE PDF ===
 
-Voici quelques exemples de règles CSS pour créer votre propre style :
+Voici quelques exemples de règles CSS pour créer votre propre style.
+Décommentez les règles que vous souhaitez activer.
 
-/* 1. Changer la couleur principale de tous vos titres */
+1. Changer la couleur principale de tous vos titres :
+
 h1, h2, h3 {
-    color: #e8570a; /* Orange chaud */
+    color: #e8570a;
 }
 
-/* 2. Ajouter une bordure décorative sous le grand titre */
+2. Ajouter une bordure décorative sous le grand titre :
+
 h1 {
     border-bottom: 2.5px solid #e8570a;
     padding-bottom: 12px;
     margin-bottom: 24px;
 }
 
-/* 3. Modifier la police et l'interligne du corps de texte */
+3. Modifier la police et l'interligne du corps de texte :
+
 body {
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 12px;
     line-height: 1.7;
-    color: #2c3e50; /* Bleu nuit ardoise */
+    color: #2c3e50;
 }
 
-/* 4. Mettre en valeur les mots importants (gras) */
+4. Mettre en valeur les mots importants (gras) :
+
 strong, b {
     color: #e8570a;
     font-weight: 600;
 }
 
-/* 5. Customiser les blocs de citations (Markdown > ) */
+5. Customiser les blocs de citations (Markdown >) :
+
 blockquote {
     background: #fff8f5;
     border-left: 4px solid #e8570a;
@@ -2302,14 +2309,13 @@ blockquote {
     font-style: italic;
 }
 
-/* 6. Ajouter des compteurs automatiques sur les titres */
-/* 
+6. Ajouter des compteurs automatiques sur les titres :
+
 body { counter-reset: section; }
 h1 { counter-increment: section; counter-reset: subsection; }
 h1::before { content: counter(section) ". "; }
 h2 { counter-increment: subsection; }
 h2::before { content: counter(section) "." counter(subsection) " "; }
-*/
 
 */`;
     let activeTab = 'markdown'; // 'markdown' or 'css'
@@ -2354,7 +2360,21 @@ Vous pouvez également faire référence à des images locales :
     };
 
     // ── Local Storage & Setup ──────────────────────────────────────────
-    
+
+    // Migration v2: clear stale mermaid_style (was persisted independently, now driven by template)
+    // and clear any corrupted pdf_custom_css that contained the old active-rules tutorial.
+    const STORAGE_VERSION = '2';
+    if (localStorage.getItem('markpdf_storage_version') !== STORAGE_VERSION) {
+      localStorage.removeItem('mermaid_style');
+      // Only reset custom CSS if it still contains the old active orange rules from the tutorial
+      const oldCss = localStorage.getItem('pdf_custom_css') || '';
+      if (oldCss.includes('color: #e8570a') && oldCss.includes('Orange chaud')) {
+        localStorage.removeItem('pdf_custom_css');
+      }
+      localStorage.setItem('markpdf_storage_version', STORAGE_VERSION);
+    }
+
+
     // Theme Loading
     if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.body.classList.add('dark-mode');
@@ -3352,11 +3372,8 @@ Vous pouvez également faire référence à des images locales :
     // Initialize Iframe Preview
     initIframe();
 
-    // Select stored template
+    // Select stored template (this also sets the matching Mermaid style automatically)
     selectTemplate(currentTemplate);
-
-    // Select stored Mermaid Style
-    selectMermaidStyle(currentMermaidStyle);
 
     // Load active tool and run initial rendering
     activeTool = localStorage.getItem('active_tool') || 'markpdf';
