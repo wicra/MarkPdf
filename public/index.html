@@ -3522,42 +3522,47 @@ Vous pouvez également faire référence à des images locales :
       document.getElementById('loading-title').textContent = "Génération de l'image...";
       document.getElementById('loading-desc').textContent = "Rendu haute qualité en cours…";
 
+      const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+      let offscreen = null;
+
       try {
-        // ── Re-rendre le diagramme hors-écran SANS contrainte de largeur ──────
-        // useMaxWidth:true contraint le SVG à la largeur du panel affiché,
-        // ce qui rogne le texte à droite sur l'export. On re-rend dans un
-        // conteneur temporaire invisible avec useMaxWidth:false pour obtenir
-        // les vraies dimensions du contenu.
-        const offscreen = document.createElement('div');
+        // ── Re-rendre hors-écran sans contrainte de largeur ──────────────────
+        // useMaxWidth:true (config preview) contraint le SVG à la largeur du
+        // panel -> texte rogné à droite. On re-rend dans un conteneur temporaire
+        // de 9999px avec useMaxWidth:false pour obtenir les vraies dimensions.
+        offscreen = document.createElement('div');
         offscreen.style.cssText = 'position:fixed;left:-99999px;top:-99999px;width:9999px;visibility:hidden;pointer-events:none;';
-        offscreen.innerHTML = '<div class="mermaid" id="mermaid-export-target">' + code + '</div>';
         document.body.appendChild(offscreen);
 
-        const exportNode = offscreen.querySelector('#mermaid-export-target');
+        // Construire le nœud cible — PAS d'id réutilisé pour éviter les conflits
+        const exportDiv = document.createElement('div');
+        exportDiv.className = 'mermaid';
+        exportDiv.textContent = code; // textContent pour éviter l'injection HTML
+        offscreen.appendChild(exportDiv);
 
-        // Réinitialiser Mermaid sans contrainte de largeur pour l'export
-        const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
-        mermaid.initialize({
+        // Config Mermaid sans contrainte de largeur — un seul appel initialize
+        const exportConfig = {
           startOnLoad: false,
           theme: activeStyle.theme,
           securityLevel: 'loose',
-          flowchart: { useMaxWidth: false, htmlLabels: true },
-          sequence:  { useMaxWidth: false },
+          flowchart:    { useMaxWidth: false, htmlLabels: true },
+          sequence:     { useMaxWidth: false },
           classDiagram: { useMaxWidth: false },
-        });
+        };
         if (activeStyle.themeVariables) {
-          mermaid.initialize({ ...mermaid.getConfig(), themeVariables: activeStyle.themeVariables });
+          exportConfig.themeVariables = activeStyle.themeVariables;
         }
+        mermaid.initialize(exportConfig);
 
-        await mermaid.run({ nodes: [exportNode] });
+        // Lancer le rendu sur ce nœud précis
+        await mermaid.run({ nodes: [exportDiv] });
 
-        const svgEl = exportNode.querySelector('svg');
+        const svgEl = exportDiv.querySelector('svg');
         if (!svgEl) {
-          document.body.removeChild(offscreen);
-          throw new Error('Le re-rendu hors-écran a échoué.');
+          throw new Error('Re-rendu hors-écran échoué — SVG non généré.');
         }
 
-        // Dimensions réelles — viewBox contient les vraies dimensions Mermaid
+        // Dimensions réelles depuis le viewBox (indépendant du panel CSS)
         const vb = svgEl.viewBox.baseVal;
         const diagramWidth  = (vb && vb.width  > 0) ? vb.width  : svgEl.scrollWidth  || 800;
         const diagramHeight = (vb && vb.height > 0) ? vb.height : svgEl.scrollHeight || 600;
@@ -3612,20 +3617,25 @@ Vous pouvez également faire référence à des images locales :
         const scaledDrawX = drawX * scale;
         const scaledDrawY = drawY * scale;
 
-        // Sérialiser le SVG hors-écran (dimensions réelles, pas contraintes par le panel)
+        // Sérialiser le SVG hors-écran (vraies dimensions)
         let svgString = new XMLSerializer().serializeToString(svgEl);
 
-        // Nettoyer le conteneur temporaire hors-écran
+        // Supprimer le conteneur hors-écran maintenant qu'on a le SVG
         document.body.removeChild(offscreen);
+        offscreen = null;
 
         // Restaurer Mermaid avec useMaxWidth:true pour le preview normal
-        mermaid.initialize({
+        const restoreConfig = {
           startOnLoad: false,
           theme: activeStyle.theme,
           securityLevel: 'loose',
           flowchart: { useMaxWidth: true, htmlLabels: true },
           sequence:  { useMaxWidth: true },
-        });
+        };
+        if (activeStyle.themeVariables) {
+          restoreConfig.themeVariables = activeStyle.themeVariables;
+        }
+        mermaid.initialize(restoreConfig);
 
         // Ajouter les namespaces manquants si absents
         if (!svgString.includes('xmlns=')) {
@@ -3716,9 +3726,26 @@ Vous pouvez également faire référence à des images locales :
         renderOnCanvas(svgBase64);
 
       } catch (err) {
-        console.error(err);
-        showToast("Erreur lors de la conversion.", "error");
+        console.error('[PNG export]', err);
+        showToast("Erreur export PNG : " + (err.message || err), "error");
         loadingOverlay.classList.remove('active');
+      } finally {
+        // Cleanup de sécurité si erreur avant removeChild
+        if (offscreen && offscreen.parentNode) {
+          offscreen.parentNode.removeChild(offscreen);
+          offscreen = null;
+        }
+        // Toujours restaurer useMaxWidth:true pour le preview
+        try {
+          const s = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: s.theme,
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true },
+            sequence:  { useMaxWidth: true },
+          });
+        } catch (_) {}
       }
     }
 
