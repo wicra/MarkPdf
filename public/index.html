@@ -3795,7 +3795,7 @@ Vous pouvez également faire référence à des images locales :
     }
 
     async function callClaudeHaiku(code) {
-      // Appel via le proxy server.js — la clé API reste côté serveur (ANTHROPIC_API_KEY)
+      // Appel via le proxy server.js — la clé OPENROUTER_API_KEY reste côté serveur
       const response = await fetch('/api/ai-optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3856,12 +3856,12 @@ Vous pouvez également faire référence à des images locales :
       .then(r => r.json())
       .then(d => {
         if (!d.available) {
-          aiOptimizeBtn.title = 'IA non configurée — ajoutez ANTHROPIC_API_KEY dans les variables Railway';
+          aiOptimizeBtn.title = 'IA non configurée — ajoutez OPENROUTER_API_KEY dans les variables Railway';
           aiOptimizeBtn.style.opacity = '0.45';
           aiOptimizeBtn.style.cursor = 'not-allowed';
           aiOptimizeBtn.addEventListener('click', e => {
             e.stopImmediatePropagation();
-            showToast('IA non configurée. Ajoutez ANTHROPIC_API_KEY dans Railway → Variables.', 'error');
+            showToast('IA non configurée. Ajoutez OPENROUTER_API_KEY dans Railway → Variables.', 'error');
           });
           return;
         }

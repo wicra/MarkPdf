@@ -244,16 +244,37 @@ function processQueue() {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
-app.get('/api/ai-status', (_req, res) => res.json({ available: !!process.env.ANTHROPIC_API_KEY }));
+app.get('/api/ai-status', (_req, res) => res.json({ available: !!process.env.OPENROUTER_API_KEY }));
 
-// ─── AI Layout Optimizer Proxy ───────────────────────────────────────────────
-// Proxy vers l'API Anthropic pour éviter d'exposer la clé dans le navigateur.
-// Nécessite la variable d'environnement ANTHROPIC_API_KEY.
+// ─── AI Layout Optimizer — proxy OpenRouter (modèles gratuits) ───────────────
+const FREE_MODELS = [
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-r1:free',
+    'microsoft/phi-4-reasoning-plus:free',
+];
+
+const AI_LAYOUT_PROMPT = [
+    'Tu es un expert en syntaxe Mermaid. Optimise le layout de ce diagramme pour un affichage HORIZONTAL (A4 paysage, slides, dossier technique).',
+    '',
+    'REGLES ABSOLUES :',
+    '1. Retourner UNIQUEMENT le code Mermaid brut. Zero texte. Zero balises markdown.',
+    '2. Ne JAMAIS modifier la logique : entites, relations, cardinalites, labels, classDef, styles.',
+    '3. Modifier UNIQUEMENT la directive direction et si necessaire l\'ordre des declarations.',
+    '4. classDiagram avec 4+ classes -> direction LR. Avec 1-3 classes -> garder l\'existant.',
+    '5. graph/flowchart avec 5+ noeuds -> LR. Moins -> garder l\'existant.',
+    '6. stateDiagram avec 4+ etats -> direction LR.',
+    '7. erDiagram, sequenceDiagram, gitGraph -> retourner tel quel sans modification.',
+    '8. Si deja en LR ou deja optimal -> retourner tel quel.',
+    '9. Respecter EXACTEMENT la meme indentation.',
+].join('\n');
+
 app.post('/api/ai-optimize', async (req, res) => {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
         return res.status(503).json({
-            error: 'La fonctionnalité IA n\'est pas configurée sur ce serveur. Ajoutez la variable d\'environnement ANTHROPIC_API_KEY.'
+            error: 'IA non configuree. Ajoutez OPENROUTER_API_KEY dans les variables Railway.',
+            configured: false
         });
     }
 
@@ -262,56 +283,55 @@ app.post('/api/ai-optimize', async (req, res) => {
         return res.status(400).json({ error: 'Le code Mermaid est vide.' });
     }
     if (code.length > 20000) {
-        return res.status(400).json({ error: 'Le diagramme est trop volumineux (max 20 000 caractères).' });
+        return res.status(400).json({ error: 'Diagramme trop volumineux (max 20 000 car.).' });
     }
 
-    const AI_LAYOUT_PROMPT = `Tu es un expert en syntaxe Mermaid. Ta mission est d'optimiser le layout d'un diagramme Mermaid pour qu'il s'affiche de façon compacte et lisible dans un format HORIZONTAL (document A4 paysage, slide, dossier technique).
+    let lastError = null;
+    for (const model of FREE_MODELS) {
+        try {
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + apiKey,
+                    'HTTP-Referer': 'https://markpdf.app',
+                    'X-Title': 'MarkPDF Mermaid Optimizer',
+                },
+                body: JSON.stringify({
+                    model,
+                    max_tokens: 2000,
+                    temperature: 0.1,
+                    messages: [
+                        { role: 'system', content: AI_LAYOUT_PROMPT },
+                        { role: 'user',   content: code }
+                    ]
+                })
+            });
 
-RÈGLES STRICTES :
-1. Tu dois retourner UNIQUEMENT le code Mermaid corrigé, sans aucun texte avant ou après, sans balises markdown, sans explications.
-2. Tu ne changes RIEN à la logique du diagramme : entités, relations, cardinalités, labels, styles — tout reste identique.
-3. Tu changes UNIQUEMENT la direction et éventuellement le groupement visuel des nœuds pour réduire la hauteur et équilibrer la largeur.
-4. Pour classDiagram : utilise direction LR si le diagramme a plus de 3 classes, direction TB si les classes ont peu de champs.
-5. Pour graph/flowchart : utilise graph LR si plus de 4 noeuds, garde graph TD sinon.
-6. Pour stateDiagram-v2 : utilise direction LR si plus de 3 états.
-7. Si le diagramme est déjà bien optimisé pour le format horizontal, retourne-le tel quel.
-8. Conserve EXACTEMENT la même indentation et les mêmes noms de classes/entités.
+            if (!orRes.ok) {
+                const err = await orRes.json().catch(() => ({}));
+                lastError = err.error?.message || 'HTTP ' + orRes.status;
+                console.warn('[AI] Model', model, 'failed:', lastError);
+                continue;
+            }
 
-Diagramme à optimiser :`;
+            const data = await orRes.json();
+            const raw  = data.choices?.[0]?.message?.content || '';
+            const optimized = raw
+                .replace(/^[\s\S]*?```(?:mermaid)?\s*/m, (m) => m.includes('```') ? '' : m)
+                .replace(/\s*```\s*$/m, '')
+                .trim();
 
-    try {
-        const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-                model: 'claude-haiku-4-5',
-                max_tokens: 2000,
-                messages: [{ role: 'user', content: AI_LAYOUT_PROMPT + '\n\n' + code }]
-            })
-        });
+            console.log('[AI] OK with:', model);
+            return res.json({ optimized, model });
 
-        if (!anthropicRes.ok) {
-            const err = await anthropicRes.json().catch(() => ({}));
-            const msg = err.error?.message || 'Erreur API Anthropic';
-            console.error('[AI proxy] Anthropic API error:', msg);
-            return res.status(502).json({ error: msg });
+        } catch (err) {
+            lastError = err.message;
+            console.warn('[AI] Model', model, 'error:', err.message);
         }
-
-        const data = await anthropicRes.json();
-        const text = (data.content?.[0]?.text || '')
-            .replace(/^\s*\`\`\`(?:mermaid)?\s*/m, '')
-            .replace(/\s*\`\`\`\s*$/m, '')
-            .trim();
-
-        res.json({ optimized: text });
-    } catch (err) {
-        console.error('[AI proxy] Error:', err.message);
-        res.status(500).json({ error: 'Erreur lors de la communication avec l\'API Anthropic : ' + err.message });
     }
+
+    res.status(502).json({ error: 'Tous les modeles IA sont temporairement indisponibles. Reessayez.' });
 });
 
 app.post('/api/generate', async (req, res) => {
