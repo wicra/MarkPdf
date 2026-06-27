@@ -3512,20 +3512,55 @@ Vous pouvez également faire référence à des images locales :
 
     // ── MermaidPNG high quality Canvas Downloader ───────────────────────────
     async function downloadMermaidPng(filename, format = 'fit', bgOption = 'theme') {
-      const svgEl = previewBody.querySelector('.mermaid svg');
-      if (!svgEl) {
+      const code = editor.value.trim();
+      if (!code || !previewBody.querySelector('.mermaid svg')) {
         showToast("Aucun diagramme Mermaid valide à exporter.", "error");
         return;
       }
 
       loadingOverlay.classList.add('active');
       document.getElementById('loading-title').textContent = "Génération de l'image...";
-      document.getElementById('loading-desc').textContent = "Conversion du diagramme SVG en image PNG Haute Définition";
+      document.getElementById('loading-desc').textContent = "Rendu haute qualité en cours…";
 
       try {
-        // Read native SVG viewBox values to calculate resolution
-        const diagramWidth = svgEl.viewBox.baseVal.width || svgEl.width.baseVal.value || 800;
-        const diagramHeight = svgEl.viewBox.baseVal.height || svgEl.height.baseVal.value || 600;
+        // ── Re-rendre le diagramme hors-écran SANS contrainte de largeur ──────
+        // useMaxWidth:true contraint le SVG à la largeur du panel affiché,
+        // ce qui rogne le texte à droite sur l'export. On re-rend dans un
+        // conteneur temporaire invisible avec useMaxWidth:false pour obtenir
+        // les vraies dimensions du contenu.
+        const offscreen = document.createElement('div');
+        offscreen.style.cssText = 'position:fixed;left:-99999px;top:-99999px;width:9999px;visibility:hidden;pointer-events:none;';
+        offscreen.innerHTML = '<div class="mermaid" id="mermaid-export-target">' + code + '</div>';
+        document.body.appendChild(offscreen);
+
+        const exportNode = offscreen.querySelector('#mermaid-export-target');
+
+        // Réinitialiser Mermaid sans contrainte de largeur pour l'export
+        const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: activeStyle.theme,
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: false, htmlLabels: true },
+          sequence:  { useMaxWidth: false },
+          classDiagram: { useMaxWidth: false },
+        });
+        if (activeStyle.themeVariables) {
+          mermaid.initialize({ ...mermaid.getConfig(), themeVariables: activeStyle.themeVariables });
+        }
+
+        await mermaid.run({ nodes: [exportNode] });
+
+        const svgEl = exportNode.querySelector('svg');
+        if (!svgEl) {
+          document.body.removeChild(offscreen);
+          throw new Error('Le re-rendu hors-écran a échoué.');
+        }
+
+        // Dimensions réelles — viewBox contient les vraies dimensions Mermaid
+        const vb = svgEl.viewBox.baseVal;
+        const diagramWidth  = (vb && vb.width  > 0) ? vb.width  : svgEl.scrollWidth  || 800;
+        const diagramHeight = (vb && vb.height > 0) ? vb.height : svgEl.scrollHeight || 600;
         
         // Define targets based on requested format
         let targetRatio = null;
@@ -3577,10 +3612,22 @@ Vous pouvez également faire référence à des images locales :
         const scaledDrawX = drawX * scale;
         const scaledDrawY = drawY * scale;
 
-        // Sérialiser le SVG et nettoyer les références externes
+        // Sérialiser le SVG hors-écran (dimensions réelles, pas contraintes par le panel)
         let svgString = new XMLSerializer().serializeToString(svgEl);
 
-        // Ajouter les namespaces manquants si absent (certains SVG Mermaid les omettent)
+        // Nettoyer le conteneur temporaire hors-écran
+        document.body.removeChild(offscreen);
+
+        // Restaurer Mermaid avec useMaxWidth:true pour le preview normal
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: activeStyle.theme,
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: true, htmlLabels: true },
+          sequence:  { useMaxWidth: true },
+        });
+
+        // Ajouter les namespaces manquants si absents
         if (!svgString.includes('xmlns=')) {
           svgString = svgString.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
         }
@@ -3588,15 +3635,13 @@ Vous pouvez également faire référence à des images locales :
           svgString = svgString.replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ');
         }
 
-        // Fixer width/height explicites pour garantir un rendu correct
-        const bbox = svgEl.getBoundingClientRect();
-        const svgW = bbox.width || diagramWidth;
-        const svgH = bbox.height || diagramHeight;
+        // Forcer les vraies dimensions dans le SVG sérialisé
+        // (diagramWidth/diagramHeight viennent du viewBox du re-rendu hors-écran)
         svgString = svgString
-          .replace(/(<svg[^>]*)\swidth="[^"]*"/, `$1 width="${svgW}"`)
-          .replace(/(<svg[^>]*)\sheight="[^"]*"/, `$1 height="${svgH}"`);
+          .replace(/(<svg[^>]*)\swidth="[^"]*"/, `$1 width="${diagramWidth}"`)
+          .replace(/(<svg[^>]*)\sheight="[^"]*"/, `$1 height="${diagramHeight}"`);
         if (!svgString.includes(' width=')) {
-          svgString = svgString.replace('<svg ', `<svg width="${svgW}" height="${svgH}" `);
+          svgString = svgString.replace('<svg ', `<svg width="${diagramWidth}" height="${diagramHeight}" `);
         }
 
         // Supprimer les @font-face et liens externes qui bloquent le rendu dans <img>
