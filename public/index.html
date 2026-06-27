@@ -3722,7 +3722,7 @@ Vous pouvez également faire référence à des images locales :
     // ── AI Layout Optimizer ────────────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════════════
 
-    // Prompt IA défini dans server.js (côté serveur, non exposé)
+    // Prompt défini côté serveur (server.js) pour ne pas l'exposer côté client
 
     let aiSelectedVariant = null; // 'original' | 'lr' | 'ai'
     let aiVariants = {};
@@ -3795,7 +3795,7 @@ Vous pouvez également faire référence à des images locales :
     }
 
     async function callClaudeHaiku(code) {
-      // Proxy via server.js — la clé OPENROUTER_API_KEY reste côté serveur
+      // Appel via le proxy server.js — la clé OPENROUTER_API_KEY reste côté serveur
       const response = await fetch('/api/ai-optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3803,9 +3803,11 @@ Vous pouvez également faire référence à des images locales :
       });
 
       const data = await response.json();
+
       if (!response.ok) {
         throw new Error(data.error || 'Erreur serveur (HTTP ' + response.status + ')');
       }
+
       return data.optimized || '';
     }
 
@@ -3849,24 +3851,24 @@ Vous pouvez également faire référence à des images locales :
       showToast('Layout appliqué avec succès.', 'success');
     }
 
-    // Vérifier si l'IA est dispo sur ce serveur au démarrage
+    // Vérifier si l'IA est disponible sur ce serveur
     fetch('/api/ai-status')
       .then(r => r.json())
       .then(d => {
         if (!d.available) {
-          aiOptimizeBtn.title = 'IA non configurée — ajoutez OPENROUTER_API_KEY dans Railway';
+          aiOptimizeBtn.title = 'IA non configurée — ajoutez OPENROUTER_API_KEY dans les variables Railway';
           aiOptimizeBtn.style.opacity = '0.45';
           aiOptimizeBtn.style.cursor = 'not-allowed';
           aiOptimizeBtn.addEventListener('click', e => {
             e.stopImmediatePropagation();
             showToast('IA non configurée. Ajoutez OPENROUTER_API_KEY dans Railway → Variables.', 'error');
           });
-        } else {
-          aiOptimizeBtn.addEventListener('click', openAiOptimizer);
+          return;
         }
+        aiOptimizeBtn.addEventListener('click', openAiOptimizer);
       })
       .catch(() => {
-        // Dev local sans la route — activer quand même
+        // Serveur dev sans la route — on active quand même
         aiOptimizeBtn.addEventListener('click', openAiOptimizer);
       });
     aiModalCloseX.addEventListener('click', closeAiModal);

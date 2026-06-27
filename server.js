@@ -244,11 +244,9 @@ function processQueue() {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
-
-// Indique si l'IA est configurée (sans exposer la clé)
 app.get('/api/ai-status', (_req, res) => res.json({ available: !!process.env.OPENROUTER_API_KEY }));
 
-// ─── AI Layout Optimizer — proxy OpenRouter (modèles gratuits) ────────────────
+// ─── AI Layout Optimizer — proxy OpenRouter (modèles gratuits) ───────────────
 const FREE_MODELS = [
     'google/gemini-2.0-flash-exp:free',
     'meta-llama/llama-3.3-70b-instruct:free',
@@ -260,7 +258,7 @@ const AI_LAYOUT_PROMPT = [
     'Tu es un expert en syntaxe Mermaid. Optimise le layout de ce diagramme pour un affichage HORIZONTAL (A4 paysage, slides, dossier technique).',
     '',
     'REGLES ABSOLUES :',
-    '1. Retourner UNIQUEMENT le code Mermaid brut. Zero texte avant ou apres. Zero balises markdown.',
+    '1. Retourner UNIQUEMENT le code Mermaid brut. Zero texte. Zero balises markdown.',
     '2. Ne JAMAIS modifier la logique : entites, relations, cardinalites, labels, classDef, styles.',
     '3. Modifier UNIQUEMENT la directive direction et si necessaire l\'ordre des declarations.',
     '4. classDiagram avec 4+ classes -> direction LR. Avec 1-3 classes -> garder l\'existant.',
