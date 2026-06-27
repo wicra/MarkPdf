@@ -244,6 +244,75 @@ function processQueue() {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/api/ai-status', (_req, res) => res.json({ available: !!process.env.ANTHROPIC_API_KEY }));
+
+// ─── AI Layout Optimizer Proxy ───────────────────────────────────────────────
+// Proxy vers l'API Anthropic pour éviter d'exposer la clé dans le navigateur.
+// Nécessite la variable d'environnement ANTHROPIC_API_KEY.
+app.post('/api/ai-optimize', async (req, res) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+        return res.status(503).json({
+            error: 'La fonctionnalité IA n\'est pas configurée sur ce serveur. Ajoutez la variable d\'environnement ANTHROPIC_API_KEY.'
+        });
+    }
+
+    const { code } = req.body;
+    if (!code || typeof code !== 'string' || code.trim().length === 0) {
+        return res.status(400).json({ error: 'Le code Mermaid est vide.' });
+    }
+    if (code.length > 20000) {
+        return res.status(400).json({ error: 'Le diagramme est trop volumineux (max 20 000 caractères).' });
+    }
+
+    const AI_LAYOUT_PROMPT = `Tu es un expert en syntaxe Mermaid. Ta mission est d'optimiser le layout d'un diagramme Mermaid pour qu'il s'affiche de façon compacte et lisible dans un format HORIZONTAL (document A4 paysage, slide, dossier technique).
+
+RÈGLES STRICTES :
+1. Tu dois retourner UNIQUEMENT le code Mermaid corrigé, sans aucun texte avant ou après, sans balises markdown, sans explications.
+2. Tu ne changes RIEN à la logique du diagramme : entités, relations, cardinalités, labels, styles — tout reste identique.
+3. Tu changes UNIQUEMENT la direction et éventuellement le groupement visuel des nœuds pour réduire la hauteur et équilibrer la largeur.
+4. Pour classDiagram : utilise direction LR si le diagramme a plus de 3 classes, direction TB si les classes ont peu de champs.
+5. Pour graph/flowchart : utilise graph LR si plus de 4 noeuds, garde graph TD sinon.
+6. Pour stateDiagram-v2 : utilise direction LR si plus de 3 états.
+7. Si le diagramme est déjà bien optimisé pour le format horizontal, retourne-le tel quel.
+8. Conserve EXACTEMENT la même indentation et les mêmes noms de classes/entités.
+
+Diagramme à optimiser :`;
+
+    try {
+        const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+                model: 'claude-haiku-4-5',
+                max_tokens: 2000,
+                messages: [{ role: 'user', content: AI_LAYOUT_PROMPT + '\n\n' + code }]
+            })
+        });
+
+        if (!anthropicRes.ok) {
+            const err = await anthropicRes.json().catch(() => ({}));
+            const msg = err.error?.message || 'Erreur API Anthropic';
+            console.error('[AI proxy] Anthropic API error:', msg);
+            return res.status(502).json({ error: msg });
+        }
+
+        const data = await anthropicRes.json();
+        const text = (data.content?.[0]?.text || '')
+            .replace(/^\s*\`\`\`(?:mermaid)?\s*/m, '')
+            .replace(/\s*\`\`\`\s*$/m, '')
+            .trim();
+
+        res.json({ optimized: text });
+    } catch (err) {
+        console.error('[AI proxy] Error:', err.message);
+        res.status(500).json({ error: 'Erreur lors de la communication avec l\'API Anthropic : ' + err.message });
+    }
+});
 
 app.post('/api/generate', async (req, res) => {
     console.log('Requête reçue pour générer un PDF');
