@@ -3722,19 +3722,7 @@ Vous pouvez également faire référence à des images locales :
     // ── AI Layout Optimizer ────────────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════════════
 
-    const AI_LAYOUT_PROMPT = `Tu es un expert en syntaxe Mermaid. Ta mission est d'optimiser le layout d'un diagramme Mermaid pour qu'il s'affiche de façon compacte et lisible dans un format HORIZONTAL (document A4 paysage, slide, dossier technique).
-
-RÈGLES STRICTES :
-1. Tu dois retourner UNIQUEMENT le code Mermaid corrigé, sans aucun texte avant ou après, sans balises markdown, sans explications.
-2. Tu ne changes RIEN à la logique du diagramme : entités, relations, cardinalités, labels, styles — tout reste identique.
-3. Tu changes UNIQUEMENT la direction et éventuellement le groupement visuel des nœuds pour réduire la hauteur et équilibrer la largeur.
-4. Pour classDiagram : utilise \`direction LR\` si le diagramme a plus de 3 classes, \`direction TB\` si les classes ont peu de champs.
-5. Pour graph/flowchart : utilise \`graph LR\` si plus de 4 nœuds, garde \`graph TD\` sinon.
-6. Pour stateDiagram-v2 : utilise \`direction LR\` si plus de 3 états.
-7. Si le diagramme est déjà bien optimisé pour le format horizontal, retourne-le tel quel.
-8. Conserve EXACTEMENT la même indentation et les mêmes noms de classes/entités.
-
-Diagramme à optimiser :`;
+    // Prompt IA défini dans server.js (côté serveur, non exposé)
 
     let aiSelectedVariant = null; // 'original' | 'lr' | 'ai'
     let aiVariants = {};
@@ -3807,31 +3795,18 @@ Diagramme à optimiser :`;
     }
 
     async function callClaudeHaiku(code) {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Proxy via server.js — la clé OPENROUTER_API_KEY reste côté serveur
+      const response = await fetch('/api/ai-optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5',
-          max_tokens: 2000,
-          messages: [{
-            role: 'user',
-            content: AI_LAYOUT_PROMPT + '\n\n' + code
-          }]
-        })
+        body: JSON.stringify({ code })
       });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || 'Erreur API Anthropic (HTTP ' + response.status + ')');
-      }
-
       const data = await response.json();
-      const text = data.content?.[0]?.text || '';
-      // Nettoyer les éventuelles balises markdown que le modèle aurait ajoutées
-      return text
-        .replace(/^\s*```(?:mermaid)?\s*/m, '')
-        .replace(/\s*```\s*$/m, '')
-        .trim();
+      if (!response.ok) {
+        throw new Error(data.error || 'Erreur serveur (HTTP ' + response.status + ')');
+      }
+      return data.optimized || '';
     }
 
     async function openAiOptimizer() {
@@ -3874,7 +3849,26 @@ Diagramme à optimiser :`;
       showToast('Layout appliqué avec succès.', 'success');
     }
 
-    aiOptimizeBtn.addEventListener('click', openAiOptimizer);
+    // Vérifier si l'IA est dispo sur ce serveur au démarrage
+    fetch('/api/ai-status')
+      .then(r => r.json())
+      .then(d => {
+        if (!d.available) {
+          aiOptimizeBtn.title = 'IA non configurée — ajoutez OPENROUTER_API_KEY dans Railway';
+          aiOptimizeBtn.style.opacity = '0.45';
+          aiOptimizeBtn.style.cursor = 'not-allowed';
+          aiOptimizeBtn.addEventListener('click', e => {
+            e.stopImmediatePropagation();
+            showToast('IA non configurée. Ajoutez OPENROUTER_API_KEY dans Railway → Variables.', 'error');
+          });
+        } else {
+          aiOptimizeBtn.addEventListener('click', openAiOptimizer);
+        }
+      })
+      .catch(() => {
+        // Dev local sans la route — activer quand même
+        aiOptimizeBtn.addEventListener('click', openAiOptimizer);
+      });
     aiModalCloseX.addEventListener('click', closeAiModal);
     aiModalCancelBtn.addEventListener('click', closeAiModal);
     aiModalApplyBtn.addEventListener('click', applyAiSelection);

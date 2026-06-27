@@ -245,6 +245,97 @@ function processQueue() {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
+// Indique si l'IA est configurée (sans exposer la clé)
+app.get('/api/ai-status', (_req, res) => res.json({ available: !!process.env.OPENROUTER_API_KEY }));
+
+// ─── AI Layout Optimizer — proxy OpenRouter (modèles gratuits) ────────────────
+const FREE_MODELS = [
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-r1:free',
+    'microsoft/phi-4-reasoning-plus:free',
+];
+
+const AI_LAYOUT_PROMPT = [
+    'Tu es un expert en syntaxe Mermaid. Optimise le layout de ce diagramme pour un affichage HORIZONTAL (A4 paysage, slides, dossier technique).',
+    '',
+    'REGLES ABSOLUES :',
+    '1. Retourner UNIQUEMENT le code Mermaid brut. Zero texte avant ou apres. Zero balises markdown.',
+    '2. Ne JAMAIS modifier la logique : entites, relations, cardinalites, labels, classDef, styles.',
+    '3. Modifier UNIQUEMENT la directive direction et si necessaire l\'ordre des declarations.',
+    '4. classDiagram avec 4+ classes -> direction LR. Avec 1-3 classes -> garder l\'existant.',
+    '5. graph/flowchart avec 5+ noeuds -> LR. Moins -> garder l\'existant.',
+    '6. stateDiagram avec 4+ etats -> direction LR.',
+    '7. erDiagram, sequenceDiagram, gitGraph -> retourner tel quel sans modification.',
+    '8. Si deja en LR ou deja optimal -> retourner tel quel.',
+    '9. Respecter EXACTEMENT la meme indentation.',
+].join('\n');
+
+app.post('/api/ai-optimize', async (req, res) => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+        return res.status(503).json({
+            error: 'IA non configuree. Ajoutez OPENROUTER_API_KEY dans les variables Railway.',
+            configured: false
+        });
+    }
+
+    const { code } = req.body;
+    if (!code || typeof code !== 'string' || code.trim().length === 0) {
+        return res.status(400).json({ error: 'Le code Mermaid est vide.' });
+    }
+    if (code.length > 20000) {
+        return res.status(400).json({ error: 'Diagramme trop volumineux (max 20 000 car.).' });
+    }
+
+    let lastError = null;
+    for (const model of FREE_MODELS) {
+        try {
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + apiKey,
+                    'HTTP-Referer': 'https://markpdf.app',
+                    'X-Title': 'MarkPDF Mermaid Optimizer',
+                },
+                body: JSON.stringify({
+                    model,
+                    max_tokens: 2000,
+                    temperature: 0.1,
+                    messages: [
+                        { role: 'system', content: AI_LAYOUT_PROMPT },
+                        { role: 'user',   content: code }
+                    ]
+                })
+            });
+
+            if (!orRes.ok) {
+                const err = await orRes.json().catch(() => ({}));
+                lastError = err.error?.message || 'HTTP ' + orRes.status;
+                console.warn('[AI] Model', model, 'failed:', lastError);
+                continue;
+            }
+
+            const data = await orRes.json();
+            const raw  = data.choices?.[0]?.message?.content || '';
+            const optimized = raw
+                .replace(/^[\s\S]*?```(?:mermaid)?\s*/m, (m) => m.includes('```') ? '' : m)
+                .replace(/\s*```\s*$/m, '')
+                .trim();
+
+            console.log('[AI] OK with:', model);
+            return res.json({ optimized, model });
+
+        } catch (err) {
+            lastError = err.message;
+            console.warn('[AI] Model', model, 'error:', err.message);
+        }
+    }
+
+    res.status(502).json({ error: 'Tous les modeles IA sont temporairement indisponibles. Reessayez.' });
+});
+
 app.post('/api/generate', async (req, res) => {
     console.log('Requête reçue pour générer un PDF');
     logMemory('Start Generation Request');
