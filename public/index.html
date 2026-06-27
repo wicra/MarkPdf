@@ -1453,11 +1453,13 @@
       script.id = 'mermaid-dynamic-script';
       script.src = `https://cdn.jsdelivr.net/npm/mermaid@${version}/dist/mermaid.min.js`;
       script.onload = () => {
-        // Réinitialiser avec la config de base — les styles seront appliqués au render
+        // Réinitialiser mermaid global (mode MermaidPNG)
         initMermaid();
-        // Re-render preview with new version
+        // Réinitialiser l'iframe avec la nouvelle version CDN (mode MarkPDF)
+        initIframe();
+        // Re-render preview
         clearTimeout(previewTimer);
-        previewTimer = setTimeout(renderPreview, 100);
+        previewTimer = setTimeout(renderPreview, 300);
         showToast(`Mermaid v${version} chargé avec succès.`, 'success');
       };
       script.onerror = () => {
@@ -2652,27 +2654,27 @@ Vous pouvez également faire référence à des images locales :
     function initIframe() {
       try {
         const doc = previewIframe.contentDocument || previewIframe.contentWindow.document;
+        // Résoudre currentMermaidVersion ICI, dans le scope de la page parente,
+        // avant que le contenu soit écrit dans l'iframe — l'iframe n'a pas accès
+        // aux variables JS de la page parente via doc.write().
+        const mermaidCdnUrl = `https://cdn.jsdelivr.net/npm/mermaid@${currentMermaidVersion}/dist/mermaid.min.js`;
         doc.open();
         doc.write(`<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <style>
-      /* Ensure that the iframe html matches PDF page margins */
       html {
         padding: 20mm 15mm !important;
         box-sizing: border-box;
         min-height: 100%;
       }
-      /* Ensure that the iframe body fits perfectly */
       body {
         margin: 0;
         min-height: 100%;
         box-sizing: border-box;
       }
-      /* Image responsiveness in iframe preview */
       img { max-width: 100%; height: auto; }
-      /* Nice custom scrollbar */
       ::-webkit-scrollbar { width: 6px; height: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
@@ -2683,15 +2685,17 @@ Vous pouvez également faire référence à des images locales :
 </head>
 <body>
     <div id="render-content"></div>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@" + currentMermaidVersion + "/dist/mermaid.min.js"><\/script>
+    <script src="${mermaidCdnUrl}"><\/script>
     <script>
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'default',
-        securityLevel: 'loose',
-        flowchart: { useMaxWidth: true, htmlLabels: true },
-        sequence: { useMaxWidth: true },
-      });
+      if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'default',
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: true, htmlLabels: true },
+          sequence: { useMaxWidth: true },
+        });
+      }
     <\/script>
 </body>
 </html>`);
@@ -2980,6 +2984,14 @@ Vous pouvez également faire référence à des images locales :
         // Remove markdown tags if any
         if (mermaidCode.startsWith('```mermaid')) {
           mermaidCode = mermaidCode.replace(/^```mermaid\s*/, '').replace(/\s*```$/, '');
+        }
+
+        // Guard : si mermaid n'est pas encore chargé (script async en cours),
+        // réessayer dans 200ms plutôt que de crasher
+        if (typeof mermaid === 'undefined') {
+          clearTimeout(previewTimer);
+          previewTimer = setTimeout(renderPreview, 200);
+          return;
         }
         
         previewBody.innerHTML = `<div class="mermaid" id="mermaid-render-target">${mermaidCode}</div>`;
