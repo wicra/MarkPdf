@@ -3735,7 +3735,7 @@ Vous pouvez également faire référence à des images locales :
     }
 
     function renderVariantCard(key, label, badgeClass, code, isDisabled = false) {
-      const preview = code ? code.substring(0, 300) + (code.length > 300 ? '…' : '') : '(identique à l'original)';
+      const preview = code ? code.substring(0, 300) + (code.length > 300 ? '\u2026' : '') : '(identique à l\'original)';
       return `<div class="ai-variant-card" data-variant="${key}" ${isDisabled ? 'style="opacity:0.5;pointer-events:none"' : ''}>
         <div class="ai-variant-header">
           <span>${label}</span>
@@ -3813,7 +3813,7 @@ Vous pouvez également faire référence à des images locales :
 
     async function openAiOptimizer() {
       const code = editor.value.trim();
-      if (!code) { showToast('L'éditeur est vide.', 'error'); return; }
+      if (!code) { showToast("L'éditeur est vide.", 'error'); return; }
 
       aiOptimizerModal.classList.add('active');
       aiSelectedVariant = null;
