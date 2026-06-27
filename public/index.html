@@ -3387,69 +3387,98 @@ Vous pouvez également faire référence à des images locales :
         const scaledDrawX = drawX * scale;
         const scaledDrawY = drawY * scale;
 
-        // Serialize the SVG — inline styles to avoid canvas taint from external resources
+        // Sérialiser le SVG et nettoyer les références externes
         let svgString = new XMLSerializer().serializeToString(svgEl);
 
-        // Strip any <image> or <use xlink:href> pointing to external URLs that taint canvas
-        svgString = svgString.replace(/<image[^>]+href=["'][^"']*^data:[^"']*["'][^>]*>/gi, '');
-
-        // Ensure SVG has explicit width/height for proper canvas rendering
-        if (!svgEl.getAttribute('width') || svgEl.getAttribute('width') === '100%') {
-          const bbox = svgEl.getBoundingClientRect();
-          svgString = svgString.replace('<svg ', `<svg width="${bbox.width}" height="${bbox.height}" `);
+        // Ajouter les namespaces manquants si absent (certains SVG Mermaid les omettent)
+        if (!svgString.includes('xmlns=')) {
+          svgString = svgString.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+        }
+        if (!svgString.includes('xmlns:xlink')) {
+          svgString = svgString.replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ');
         }
 
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        const blobUrl = URL.createObjectURL(svgBlob);
+        // Fixer width/height explicites pour garantir un rendu correct
+        const bbox = svgEl.getBoundingClientRect();
+        const svgW = bbox.width || diagramWidth;
+        const svgH = bbox.height || diagramHeight;
+        svgString = svgString
+          .replace(/(<svg[^>]*)\swidth="[^"]*"/, `$1 width="${svgW}"`)
+          .replace(/(<svg[^>]*)\sheight="[^"]*"/, `$1 height="${svgH}"`);
+        if (!svgString.includes(' width=')) {
+          svgString = svgString.replace('<svg ', `<svg width="${svgW}" height="${svgH}" `);
+        }
 
-        const img = new Image();
-        // Ne pas mettre crossOrigin sur un blob URL local — c'est ça qui causait le taint
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = scaledCanvasWidth;
-          canvas.height = scaledCanvasHeight;
-          const ctx = canvas.getContext('2d');
+        // Supprimer les @font-face et liens externes qui bloquent le rendu dans <img>
+        svgString = svgString
+          .replace(/@font-face\s*\{[^}]*\}/g, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, (match) => {
+            // Garder les styles mais retirer les imports externes
+            return match.replace(/@import[^;]*;/g, '').replace(/url\(['"]?https?:[^)'"]*['"]?\)/g, 'none');
+          });
 
-          // Determine background color
-          let bgColor = 'transparent';
-          if (bgOption === 'white') {
-            bgColor = '#ffffff';
-          } else if (bgOption === 'theme') {
-            const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
-            bgColor = activeStyle.bg || '#ffffff';
-          }
+        // Encoder en base64 data URI — évite tous les problèmes de taint cross-origin
+        // et garantit que le navigateur charge le SVG sans restrictions de sécurité
+        const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
 
-          // Draw background
-          if (bgColor !== 'transparent') {
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, scaledCanvasWidth, scaledCanvasHeight);
-          } else {
-            ctx.clearRect(0, 0, scaledCanvasWidth, scaledCanvasHeight);
-          }
+        const renderOnCanvas = (src) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width  = scaledCanvasWidth;
+            canvas.height = scaledCanvasHeight;
+            const ctx = canvas.getContext('2d');
 
-          // Draw centered / scaled diagram
-          ctx.drawImage(img, scaledDrawX, scaledDrawY, scaledDrawWidth, scaledDrawHeight);
+            // Fond
+            let bgColor = 'transparent';
+            if (bgOption === 'white') {
+              bgColor = '#ffffff';
+            } else if (bgOption === 'theme') {
+              const activeStyle = MERMAID_STYLES[currentMermaidStyle] || MERMAID_STYLES.default;
+              bgColor = activeStyle.bg || '#ffffff';
+            }
+            if (bgColor !== 'transparent') {
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, scaledCanvasWidth, scaledCanvasHeight);
+            } else {
+              ctx.clearRect(0, 0, scaledCanvasWidth, scaledCanvasHeight);
+            }
 
-          // Get image format download
-          const pngUrl = canvas.toDataURL('image/png');
-          const a = document.createElement('a');
-          a.href = pngUrl;
-          a.download = `${filename}.png`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+            ctx.drawImage(img, scaledDrawX, scaledDrawY, scaledDrawWidth, scaledDrawHeight);
 
-          URL.revokeObjectURL(blobUrl);
-          showToast("PNG téléchargé avec succès !", "success");
-          loadingOverlay.classList.remove('active');
+            try {
+              const pngUrl = canvas.toDataURL('image/png');
+              const a = document.createElement('a');
+              a.href = pngUrl;
+              a.download = `${filename}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              showToast("PNG téléchargé avec succès !", "success");
+            } catch (taintErr) {
+              // Fallback : télécharger le SVG directement si le canvas est tainted
+              console.warn('Canvas taint, fallback SVG download:', taintErr);
+              const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+              const svgUrl  = URL.createObjectURL(svgBlob);
+              const a = document.createElement('a');
+              a.href = svgUrl;
+              a.download = `${filename}.svg`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(svgUrl);
+              showToast("PNG non disponible — SVG téléchargé à la place.", "info");
+            }
+            loadingOverlay.classList.remove('active');
+          };
+          img.onerror = () => {
+            showToast("Erreur lors du rendu de l'image.", "error");
+            loadingOverlay.classList.remove('active');
+          };
+          img.src = src;
         };
 
-        img.onerror = () => {
-          showToast("Erreur lors du rendu de l'image.", "error");
-          loadingOverlay.classList.remove('active');
-        };
-
-        img.src = blobUrl;
+        renderOnCanvas(svgBase64);
 
       } catch (err) {
         console.error(err);
