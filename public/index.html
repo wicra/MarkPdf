@@ -927,6 +927,61 @@
     #css-editor::placeholder { color: var(--text-muted); opacity: 0.5; }
 
     /* ── Template & Diagram Style Selector Dropdowns ──────────────── */
+    /* ── Status bar ───────────────────────────────────────────────── */
+    #editor-statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 3px 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      user-select: none;
+      flex-shrink: 0;
+      gap: 12px;
+    }
+    #editor-statusbar .stat-group { display: flex; gap: 10px; }
+    #editor-statusbar .stat { white-space: nowrap; }
+    #editor-statusbar .autosave-indicator {
+      font-size: 10px;
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    #editor-statusbar .autosave-indicator.visible { opacity: 1; }
+
+    /* ── URL import modal ──────────────────────────────────────────── */
+    #url-import-modal { display: none; }
+    #url-import-modal.active { display: flex; }
+    #url-import-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      margin-top: 8px;
+      box-sizing: border-box;
+    }
+    #url-import-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .url-import-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ── Keyboard shortcut badges ──────────────────────────────────── */
+    .kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      border: 1px solid var(--border-strong);
+      border-radius: 3px;
+      font-size: 10px;
+      font-family: var(--font-mono, monospace);
+      background: var(--surface);
+    }
+
     .mermaid-version-container {
       position: relative;
     }
@@ -1145,6 +1200,10 @@
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
             Ouvrir
           </button>
+          <button class="btn btn-secondary" id="url-import-btn" title="Importer depuis une URL (Ctrl+U)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            URL
+          </button>
           <button class="btn btn-secondary" id="copy-btn" title="Copier le code">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
             Copier
@@ -1157,6 +1216,17 @@
       <div id="editor-container">
         <textarea id="editor" placeholder="Rédigez votre Markdown ici, ou déposez un fichier .md..."></textarea>
         <textarea id="css-editor" placeholder="Saisissez votre CSS personnalisé ici pour affiner le style du PDF..." style="display: none;"></textarea>
+      </div>
+      <div id="editor-statusbar">
+        <div class="stat-group">
+          <span class="stat" id="stat-words">0 mot</span>
+          <span class="stat" id="stat-chars">0 car.</span>
+          <span class="stat" id="stat-lines">1 ligne</span>
+        </div>
+        <div class="stat-group">
+          <span class="autosave-indicator" id="autosave-indicator">✓ Sauvegardé</span>
+          <span class="stat" style="opacity:0.5">Ctrl+S · Ctrl+U · Tab</span>
+        </div>
       </div>
     </div>
 
@@ -1392,15 +1462,55 @@
 
   <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
-  <!-- ── Mermaid version loader (dynamic) ──────────────────────────────── -->
+  <!-- ── Mermaid version loader (dynamic, no document.write) ─────────── -->
   <script>
-    (function() {
-      var saved = localStorage.getItem('mermaid_version') || '11';
-      var url = 'https://cdn.jsdelivr.net/npm/mermaid@' + saved + '/dist/mermaid.min.js';
-      document.write('<script src="' + url + '"><\/script>');
+    'use strict';
+    function initMermaid() {
+      if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'default',
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: true, htmlLabels: true },
+          sequence: { useMaxWidth: true },
+        });
+      }
+    }
+    (function loadMermaid() {
+      var version = localStorage.getItem('mermaid_version') || '11';
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@' + version + '/dist/mermaid.min.js';
+      script.async = false;
+      script.onload = function() { initMermaid(); };
+      script.onerror = function() { console.error('Mermaid v' + version + ' CDN failed.'); };
+      document.head.appendChild(script);
     })();
   </script>
   
+  <!-- ── URL Import Modal ─────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="url-import-modal">
+    <div class="modal-container" style="max-width:480px">
+      <div class="modal-header">
+        <h3>Importer depuis une URL</h3>
+        <button class="modal-close" id="url-modal-close-x" aria-label="Fermer">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label for="url-import-input">URL du fichier Markdown</label>
+        <input type="url" id="url-import-input" placeholder="https://raw.githubusercontent.com/user/repo/main/README.md" autocomplete="off" />
+        <p class="url-import-hint">Fonctionne avec les URLs raw GitHub, GitLab, ou tout fichier .md accessible publiquement.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="url-modal-cancel-btn">Annuler</button>
+        <button class="btn btn-primary" id="url-modal-confirm-btn">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+          Importer
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     'use strict';
 
@@ -1466,6 +1576,16 @@
     const cssEditor       = document.getElementById('css-editor');
     const fileInput       = document.getElementById('file-input');
     const uploadBtn       = document.getElementById('upload-btn');
+    const urlImportBtn    = document.getElementById('url-import-btn');
+    const urlImportModal  = document.getElementById('url-import-modal');
+    const urlImportInput  = document.getElementById('url-import-input');
+    const urlModalCloseX  = document.getElementById('url-modal-close-x');
+    const urlModalCancel  = document.getElementById('url-modal-cancel-btn');
+    const urlModalConfirm = document.getElementById('url-modal-confirm-btn');
+    const statWords       = document.getElementById('stat-words');
+    const statChars       = document.getElementById('stat-chars');
+    const statLines       = document.getElementById('stat-lines');
+    const autosaveIndicator = document.getElementById('autosave-indicator');
     const copyBtn         = document.getElementById('copy-btn');
     const clearBtn        = document.getElementById('clear-btn');
     const actionBtn       = document.getElementById('action-btn');
@@ -2892,6 +3012,21 @@ Vous pouvez également faire référence à des images locales :
       const md = editor.value;
       localStorage.setItem(`editor_content_${activeTool}`, md);
 
+      // ── Status bar update ──────────────────────────────────────────
+      if (activeTool === 'markpdf') {
+        const words = md.trim() === '' ? 0 : md.trim().split(/\s+/).length;
+        const chars = md.length;
+        const lines = md === '' ? 1 : md.split('\n').length;
+        statWords.textContent = words + (words <= 1 ? ' mot' : ' mots');
+        statChars.textContent = chars + ' car.';
+        statLines.textContent = lines + (lines <= 1 ? ' ligne' : ' lignes');
+
+        // Autosave indicator
+        autosaveIndicator.classList.add('visible');
+        clearTimeout(window._autosaveTimer);
+        window._autosaveTimer = setTimeout(() => autosaveIndicator.classList.remove('visible'), 1800);
+      }
+
       if (!md.trim()) {
         previewBody.innerHTML = '';
         previewBody.appendChild(emptyState);
@@ -3534,7 +3669,118 @@ Vous pouvez également faire référence à des images locales :
     // Select stored template (this also sets the matching Mermaid style automatically)
     selectTemplate(currentTemplate);
 
-    // Load active tool and run initial rendering
+    // ── URL Import ───────────────────────────────────────────────────────────
+    function openUrlModal() {
+      urlImportModal.classList.add('active');
+      urlImportInput.value = '';
+      setTimeout(() => urlImportInput.focus(), 50);
+    }
+    function closeUrlModal() {
+      urlImportModal.classList.remove('active');
+    }
+    async function importFromUrl() {
+      const url = urlImportInput.value.trim();
+      if (!url) { showToast('Veuillez entrer une URL.', 'error'); return; }
+
+      // Convertir les URLs GitHub blob en raw
+      let fetchUrl = url
+        .replace('https://github.com/', 'https://raw.githubusercontent.com/')
+        .replace('/blob/', '/');
+
+      urlModalConfirm.disabled = true;
+      urlModalConfirm.textContent = 'Chargement…';
+      try {
+        const res = await fetch(fetchUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        editor.value = text;
+
+        // Extraire le nom de fichier depuis l'URL
+        const parts = fetchUrl.split('/');
+        const fname = parts[parts.length - 1].replace(/\.md$/i, '') || 'imported';
+        setFilename(fname);
+
+        closeUrlModal();
+        renderPreview();
+        showToast('Fichier importé avec succès !', 'success');
+      } catch (e) {
+        showToast('Erreur lors du chargement : ' + e.message, 'error');
+      } finally {
+        urlModalConfirm.disabled = false;
+        urlModalConfirm.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Importer';
+      }
+    }
+
+    urlImportBtn.addEventListener('click', openUrlModal);
+    urlModalCloseX.addEventListener('click', closeUrlModal);
+    urlModalCancel.addEventListener('click', closeUrlModal);
+    urlModalConfirm.addEventListener('click', importFromUrl);
+    urlImportModal.addEventListener('click', e => { if (e.target === urlImportModal) closeUrlModal(); });
+    urlImportInput.addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
+
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl+S — télécharger (PDF ou PNG selon le mode)
+      if (ctrl && e.key === 's') {
+        e.preventDefault();
+        if (!actionBtn.disabled) actionBtn.click();
+        return;
+      }
+
+      // Ctrl+U — ouvrir modal d'import URL
+      if (ctrl && e.key === 'u') {
+        e.preventDefault();
+        if (activeTool === 'markpdf') openUrlModal();
+        return;
+      }
+
+      // Ctrl+Shift+P — basculer layout preview / split
+      if (ctrl && e.shiftKey && e.key === 'P') {
+        e.preventDefault();
+        const current = localStorage.getItem('layout') || 'split';
+        setLayout(current === 'preview' ? 'split' : 'preview');
+        return;
+      }
+
+      // Ctrl+Shift+E — basculer layout editor / split
+      if (ctrl && e.shiftKey && e.key === 'E') {
+        e.preventDefault();
+        const current = localStorage.getItem('layout') || 'split';
+        setLayout(current === 'editor' ? 'split' : 'editor');
+        return;
+      }
+    });
+
+    // Tab dans l'éditeur — indenter avec 2 espaces au lieu de changer de focus
+    editor.addEventListener('keydown', e => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = editor.selectionStart;
+        const end   = editor.selectionEnd;
+        const val   = editor.value;
+
+        if (start === end) {
+          // Pas de sélection : insérer 2 espaces
+          editor.value = val.substring(0, start) + '  ' + val.substring(end);
+          editor.selectionStart = editor.selectionEnd = start + 2;
+        } else {
+          // Sélection multiligne : indenter chaque ligne
+          const before   = val.substring(0, start);
+          const selected = val.substring(start, end);
+          const after    = val.substring(end);
+          const indented = selected.replace(/^/gm, '  ');
+          editor.value = before + indented + after;
+          editor.selectionStart = start;
+          editor.selectionEnd   = start + indented.length;
+        }
+        // Déclencher la sauvegarde / preview
+        editor.dispatchEvent(new Event('input'));
+      }
+    });
+
+    // ── Load active tool and run initial rendering ────────────────────────────
     activeTool = localStorage.getItem('active_tool') || 'markpdf';
     switchTool(activeTool, false);
   </script>
