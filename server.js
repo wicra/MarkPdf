@@ -100,7 +100,7 @@ h2 { page-break-before: auto; }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function buildHtml(bodyHtml, title, templateCss, customCss, mermaidTheme = 'default', mermaidThemeVariables = null) {
+function buildHtml(bodyHtml, title, templateCss, customCss, mermaidTheme = 'default', mermaidThemeVariables = null, mermaidVersion = '11') {
     const activeTemplateCss = templateCss || PDF_STYLE;
     const themeVarsString = mermaidThemeVariables ? JSON.stringify(mermaidThemeVariables) : 'null';
     return `<!DOCTYPE html>
@@ -113,7 +113,7 @@ function buildHtml(bodyHtml, title, templateCss, customCss, mermaidTheme = 'defa
 </head>
 <body>
 ${bodyHtml}
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@${mermaidVersion}/dist/mermaid.min.js"></script>
 <script>
     document.querySelectorAll('pre code.language-mermaid').forEach(function(el) {
         var div = document.createElement('div');
@@ -249,13 +249,17 @@ app.post('/api/generate', async (req, res) => {
     console.log('Requête reçue pour générer un PDF');
     logMemory('Start Generation Request');
 
-    const { markdown, filename = 'document', includeHeaderFooter = true, templateCss = '', customCss = '', footerTemplate = '', headerTemplate = '', mermaidTheme = 'default', mermaidThemeVariables = null } = req.body;
+    const { markdown, filename = 'document', includeHeaderFooter = true, templateCss = '', customCss = '', footerTemplate = '', headerTemplate = '', mermaidTheme = 'default', mermaidThemeVariables = null, mermaidVersion = '11' } = req.body;
     console.log('Contenu Markdown reçu, taille:', markdown ? markdown.length : 0);
 
     if (!markdown || typeof markdown !== 'string' || markdown.trim().length === 0) {
         console.log('Contenu Markdown vide ou invalide');
         return res.status(400).json({ error: 'Le contenu Markdown est vide.' });
     }
+
+    // Validate mermaidVersion — only allow known safe versions
+    const ALLOWED_MERMAID_VERSIONS = ['9', '10', '11'];
+    const safeMermaidVersion = ALLOWED_MERMAID_VERSIONS.includes(String(mermaidVersion)) ? String(mermaidVersion) : '11';
 
     if (markdown.length > 5_000_000) {
         console.log('Contenu Markdown trop volumineux');
@@ -273,7 +277,7 @@ app.post('/api/generate', async (req, res) => {
 
             console.log('Conversion du Markdown en HTML...');
             const bodyHtml = marked.parse(markdown);
-            const fullHtml = buildHtml(bodyHtml, safeFilename, templateCss, customCss, mermaidTheme, mermaidThemeVariables);
+            const fullHtml = buildHtml(bodyHtml, safeFilename, templateCss, customCss, mermaidTheme, mermaidThemeVariables, safeMermaidVersion);
 
             const browser = await getBrowser();
             browserUsageCount++;
