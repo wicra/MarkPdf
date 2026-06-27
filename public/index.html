@@ -3537,7 +3537,12 @@ Vous pouvez également faire référence à des images locales :
         // Construire le nœud cible — PAS d'id réutilisé pour éviter les conflits
         const exportDiv = document.createElement('div');
         exportDiv.className = 'mermaid';
-        exportDiv.textContent = code; // textContent pour éviter l'injection HTML
+        // Nettoyer les balises ```mermaid...``` si présentes dans l'éditeur
+        const cleanCode = code
+          .replace(/^[\s\S]*?```(?:mermaid)?[^\S\n]*\n/, '')  // supprimer tout avant + la ligne ```mermaid
+          .replace(/\n[^\S\n]*```[^\S\n]*$/, '')              // supprimer la ligne ``` finale
+          .trim();
+        exportDiv.textContent = cleanCode || code;
         offscreen.appendChild(exportDiv);
 
         // Config Mermaid sans contrainte de largeur — un seul appel initialize
