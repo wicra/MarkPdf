@@ -3588,10 +3588,17 @@ Vous pouvez également faire référence à des images locales :
           svgString = svgString.replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ');
         }
 
-        // Fixer width/height explicites pour garantir un rendu correct
-        const bbox = svgEl.getBoundingClientRect();
-        const svgW = bbox.width || diagramWidth;
-        const svgH = bbox.height || diagramHeight;
+        // Dimensions réelles du SVG — PAS getBoundingClientRect() qui retourne
+        // la taille affichée à l'écran (contrainte par le CSS du panel preview),
+        // ce qui rognerait l'image. On utilise viewBox ou scrollWidth/scrollHeight.
+        const vb = svgEl.viewBox.baseVal;
+        const svgW = (vb && vb.width > 0) ? vb.width
+                   : svgEl.scrollWidth  || svgEl.width.baseVal.value  || diagramWidth;
+        const svgH = (vb && vb.height > 0) ? vb.height
+                   : svgEl.scrollHeight || svgEl.height.baseVal.value || diagramHeight;
+
+        // Forcer width/height explicites dans le SVG sérialisé avec les vraies dimensions
+        // (certains SVG Mermaid ont width="100%" ce qui fait planter le rendu canvas)
         svgString = svgString
           .replace(/(<svg[^>]*)\swidth="[^"]*"/, `$1 width="${svgW}"`)
           .replace(/(<svg[^>]*)\sheight="[^"]*"/, `$1 height="${svgH}"`);
