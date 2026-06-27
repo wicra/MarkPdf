@@ -927,6 +927,56 @@
     #css-editor::placeholder { color: var(--text-muted); opacity: 0.5; }
 
     /* ── Template & Diagram Style Selector Dropdowns ──────────────── */
+    .mermaid-version-container {
+      position: relative;
+    }
+    .mermaid-version-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #ddd);
+      background: var(--bg, #fff);
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .mermaid-version-btn:hover { background: var(--hover-bg, #f5f5f5); }
+    .mermaid-version-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--bg, #fff);
+      border: 1px solid var(--border, #ddd);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.1);
+      z-index: 100;
+      min-width: 180px;
+      overflow: hidden;
+    }
+    .mermaid-version-dropdown.active { display: block; }
+    .mermaid-version-item {
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .mermaid-version-item:hover { background: var(--hover-bg, #f5f5f5); }
+    .mermaid-version-item.active { font-weight: 600; }
+    .mermaid-version-item strong { display: block; font-size: 12px; }
+    .mermaid-version-item span { font-size: 11px; color: #888; }
+    .version-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      background: #dbeafe;
+      color: #1d4ed8;
+      margin-left: 4px;
+    }
+    
     .template-selector-container, .mermaid-style-container {
       position: relative;
     }
@@ -1192,7 +1242,26 @@
             </div>
           </div>
 
-          <button class="btn btn-primary" id="action-btn" disabled>
+          <!-- Dropdown Mermaid version selector -->
+          <div class="mermaid-version-container" id="mermaid-version-container">
+            <button class="btn btn-secondary mermaid-version-btn" id="mermaid-version-trigger" title="Choisir la version de Mermaid">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span id="current-mermaid-version-text">Mermaid v11</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="mermaid-version-dropdown" id="mermaid-version-dropdown-menu">
+              <div class="mermaid-version-item" data-version="10">
+                <strong>Mermaid v10 <span class="version-badge">stable</span></strong>
+                <span>Syntaxe classique, large compatibilité</span>
+              </div>
+              <div class="mermaid-version-item active" data-version="11">
+                <strong>Mermaid v11 <span class="version-badge" style="background:#dcfce7;color:#16a34a;">latest</span></strong>
+                <span>classDef, theming avancé, recommandé</span>
+              </div>
+            </div>
+          </div>
+
+                    <button class="btn btn-primary" id="action-btn" disabled>
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
             <span id="action-btn-text">Télécharger le PDF</span>
           </button>
@@ -1323,7 +1392,14 @@
 
   <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <!-- ── Mermaid version loader (dynamic) ──────────────────────────────── -->
+  <script>
+    (function() {
+      var saved = localStorage.getItem('mermaid_version') || '11';
+      var url = 'https://cdn.jsdelivr.net/npm/mermaid@' + saved + '/dist/mermaid.min.js';
+      document.write('<script src="' + url + '"><\/script>');
+    })();
+  </script>
   
   <script>
     'use strict';
@@ -1336,6 +1412,53 @@
       flowchart: { useMaxWidth: true, htmlLabels: true },
       sequence: { useMaxWidth: true },
     });
+
+    // ── Mermaid Version Management ─────────────────────────────────────────
+    let currentMermaidVersion = localStorage.getItem('mermaid_version') || '11';
+
+    const MERMAID_VERSIONS = {
+      '10': { label: 'Mermaid v10', note: 'Syntaxe classique' },
+      '11': { label: 'Mermaid v11', note: 'classDef & theming avancé' },
+    };
+
+    function applyMermaidVersion(version) {
+      currentMermaidVersion = version;
+      localStorage.setItem('mermaid_version', version);
+
+      // Update UI
+      const versionItems = document.querySelectorAll('.mermaid-version-item');
+      versionItems.forEach(i => i.classList.remove('active'));
+      const activeItem = document.querySelector(`.mermaid-version-item[data-version="${version}"]`);
+      if (activeItem) {
+        activeItem.classList.add('active');
+        document.getElementById('current-mermaid-version-text').textContent = MERMAID_VERSIONS[version]?.label || 'Mermaid v' + version;
+      }
+
+      // Reload mermaid from correct CDN and re-initialize
+      const existingScript = document.getElementById('mermaid-dynamic-script');
+      if (existingScript) existingScript.remove();
+
+      const script = document.createElement('script');
+      script.id = 'mermaid-dynamic-script';
+      script.src = `https://cdn.jsdelivr.net/npm/mermaid@${version}/dist/mermaid.min.js`;
+      script.onload = () => {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'default',
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: true, htmlLabels: true },
+          sequence: { useMaxWidth: true },
+        });
+        // Re-render preview with new version
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(renderPreview, 100);
+        showToast(`Mermaid v${version} chargé avec succès.`, 'success');
+      };
+      script.onerror = () => {
+        showToast(`Impossible de charger Mermaid v${version}.`, 'error');
+      };
+      document.body.appendChild(script);
+    }
 
     // ── Dom Elements ─────────────────────────────────────────────────────────
     const workspace       = document.getElementById('workspace');
@@ -2554,7 +2677,7 @@ Vous pouvez également faire référence à des images locales :
 </head>
 <body>
     <div id="render-content"></div>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"><\/script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@" + currentMermaidVersion + "/dist/mermaid.min.js"><\/script>
     <script>
       mermaid.initialize({
         startOnLoad: false,
@@ -2684,6 +2807,41 @@ Vous pouvez également faire référence à des images locales :
       const matchingStyle = TEMPLATE_TO_MERMAID_STYLE[template] || 'default';
       selectMermaidStyle(matchingStyle);
     }
+
+    // ── Mermaid Version Dropdown Management ──────────────────────────────────
+    const mermaidVersionTrigger = document.getElementById('mermaid-version-trigger');
+    const mermaidVersionMenu    = document.getElementById('mermaid-version-dropdown-menu');
+    const mermaidVersionItems   = document.querySelectorAll('.mermaid-version-item');
+
+    // Init display from saved version
+    const savedVersion = currentMermaidVersion;
+    const savedVersionItem = document.querySelector(`.mermaid-version-item[data-version="${savedVersion}"]`);
+    if (savedVersionItem) {
+      mermaidVersionItems.forEach(i => i.classList.remove('active'));
+      savedVersionItem.classList.add('active');
+      document.getElementById('current-mermaid-version-text').textContent = MERMAID_VERSIONS[savedVersion]?.label || 'Mermaid v' + savedVersion;
+    }
+
+    mermaidVersionTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      mermaidVersionMenu.classList.toggle('active');
+    });
+
+    mermaidVersionItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const version = item.dataset.version;
+        mermaidVersionMenu.classList.remove('active');
+        if (version !== currentMermaidVersion) {
+          applyMermaidVersion(version);
+        }
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#mermaid-version-container')) {
+        mermaidVersionMenu.classList.remove('active');
+      }
+    });
 
     // ── Mermaid Style Dropdown Management ────────────────────────────────────
     mermaidStyleTrigger.addEventListener('click', (e) => {
@@ -2969,7 +3127,8 @@ Vous pouvez également faire référence à des images locales :
             customCss: (customCss || '') + '\n' + styleBgOverride,
             footerTemplate: footerTemplate,
             mermaidTheme: activeStyle.theme,
-            mermaidThemeVariables: activeStyle.themeVariables || null
+            mermaidThemeVariables: activeStyle.themeVariables || null,
+            mermaidVersion: currentMermaidVersion
           }),
         });
 
