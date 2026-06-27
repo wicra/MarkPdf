@@ -977,6 +977,29 @@
       margin-left: 4px;
     }
     
+    /* ── Layout rotation button ───────────────────────────────────── */
+    #rotate-layout-btn { display: none; position: relative; }
+    #rotate-layout-btn.visible { display: inline-flex; }
+    #rotate-layout-btn svg { transition: transform 0.3s ease; }
+    #rotate-layout-btn.is-lr svg { transform: rotate(90deg); }
+    .rotate-tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text-primary);
+      color: var(--surface-2, #fff);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 50;
+    }
+    #rotate-layout-btn:hover .rotate-tooltip { opacity: 1; }
+
     .template-selector-container, .mermaid-style-container {
       position: relative;
     }
@@ -1151,6 +1174,16 @@
           </button>
           <button class="btn btn-secondary" id="clear-btn" title="Effacer le contenu">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+          <button class="btn btn-secondary" id="rotate-layout-btn" title="Basculer orientation du diagramme (TB ↔ LR)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <path d="M10 6.5h4M17 10v4"/>
+            </svg>
+            <span id="rotate-layout-label">TB</span>
+            <span class="rotate-tooltip" id="rotate-tooltip">Orientation : Haut → Bas</span>
           </button>
         </div>
       </div>
@@ -1475,7 +1508,10 @@
     const fileInput       = document.getElementById('file-input');
     const uploadBtn       = document.getElementById('upload-btn');
     const copyBtn         = document.getElementById('copy-btn');
-    const clearBtn        = document.getElementById('clear-btn');
+    const clearBtn          = document.getElementById('clear-btn');
+    const rotateLayoutBtn   = document.getElementById('rotate-layout-btn');
+    const rotateLayoutLabel = document.getElementById('rotate-layout-label');
+    const rotateTooltip     = document.getElementById('rotate-tooltip');
     const actionBtn       = document.getElementById('action-btn');
     const actionBtnText   = document.getElementById('action-btn-text');
     const previewBody     = document.getElementById('preview-body');
@@ -2613,6 +2649,12 @@ Vous pouvez également faire référence à des images locales :
       setFilename(savedName || (tool === 'markpdf' ? 'document' : 'diagramme'));
       
       renderPreview();
+      // Cacher/montrer le bouton rotation selon le mode
+      if (tool === 'mermaidpng') {
+        updateRotateBtn(editor.value);
+      } else {
+        rotateLayoutBtn.classList.remove('visible');
+      }
     }
 
     // ── Theme management ─────────────────────────────────────────────────────
@@ -2901,6 +2943,13 @@ Vous pouvez également faire référence à des images locales :
     async function renderPreview() {
       const md = editor.value;
       localStorage.setItem(`editor_content_${activeTool}`, md);
+
+      // Mettre à jour le bouton rotation selon le diagramme en cours
+      if (activeTool === 'mermaidpng') {
+        updateRotateBtn(md);
+      } else {
+        rotateLayoutBtn.classList.remove('visible');
+      }
 
       if (!md.trim()) {
         previewBody.innerHTML = '';
@@ -3527,6 +3576,70 @@ Vous pouvez également faire référence à des images locales :
       filenameDisplay.title = currentFilename;
       localStorage.setItem(`filename_${activeTool}`, currentFilename);
     }
+
+    // ── Layout rotation (TB ↔ LR) ───────────────────────────────────────────
+    // Fonctionne sur tout diagramme Mermaid supportant direction TB/LR :
+    // classDiagram, graph, flowchart, stateDiagram, sequenceDiagram (ignoré si non applicable)
+
+    const DIRECTION_TB_PATTERNS = [
+      /^(\s*direction\s+)(TB|BT)(\s*)/m,
+      /^(\s*)(graph|flowchart)\s+(TB|BT)(\s)/m,
+    ];
+    const DIRECTION_LR_PATTERNS = [
+      /^(\s*direction\s+)(LR|RL)(\s*)/m,
+      /^(\s*)(graph|flowchart)\s+(LR|RL)(\s)/m,
+    ];
+
+    function detectCurrentDirection(code) {
+      for (const p of DIRECTION_LR_PATTERNS) if (p.test(code)) return 'LR';
+      for (const p of DIRECTION_TB_PATTERNS) if (p.test(code)) return 'TB';
+      return null; // diagramme sans direction explicite (sequence, er…)
+    }
+
+    function hasDirectionSupport(code) {
+      // Seuls classDiagram, graph, flowchart, stateDiagram supportent direction
+      return /^\s*(classDiagram|graph\s|flowchart\s|stateDiagram)/m.test(code);
+    }
+
+    function applyDirection(code, dir) {
+      // 1. direction TB/LR/BT/RL explicite (classDiagram, stateDiagram)
+      if (/^\s*direction\s+(TB|BT|LR|RL)/m.test(code)) {
+        return code.replace(/^(\s*direction\s+)(TB|BT|LR|RL)(\s*)/m, `$1${dir}$3`);
+      }
+      // 2. graph TB / flowchart LR etc.
+      if (/^\s*(graph|flowchart)\s+(TB|BT|LR|RL|TD)/m.test(code)) {
+        return code.replace(/^(\s*(?:graph|flowchart)\s+)(TB|BT|LR|RL|TD)(\s)/m, `$1${dir}$3`);
+      }
+      // 3. Pas de direction déclarée — injecter après la première ligne du diagramme
+      const lines = code.split('\n');
+      lines.splice(1, 0, `    direction ${dir}`);
+      return lines.join('\n');
+    }
+
+    function updateRotateBtn(code) {
+      if (!hasDirectionSupport(code)) {
+        rotateLayoutBtn.classList.remove('visible');
+        return;
+      }
+      rotateLayoutBtn.classList.add('visible');
+      const dir = detectCurrentDirection(code) || 'TB';
+      const isLR = dir === 'LR' || dir === 'RL';
+      rotateLayoutBtn.classList.toggle('is-lr', isLR);
+      rotateLayoutLabel.textContent = isLR ? 'LR' : 'TB';
+      rotateTooltip.textContent = isLR
+        ? 'Orientation : Gauche → Droite (cliquer pour Haut → Bas)'
+        : 'Orientation : Haut → Bas (cliquer pour Gauche → Droite)';
+    }
+
+    rotateLayoutBtn.addEventListener('click', () => {
+      const code = editor.value;
+      const currentDir = detectCurrentDirection(code) || 'TB';
+      const isLR = currentDir === 'LR' || currentDir === 'RL';
+      const newDir = isLR ? 'TB' : 'LR';
+      editor.value = applyDirection(code, newDir);
+      updateRotateBtn(editor.value);
+      editor.dispatchEvent(new Event('input')); // déclenche renderPreview
+    });
 
     // ── Copy editor content ──────────────────────────────────────────────────
     copyBtn.addEventListener('click', () => {
