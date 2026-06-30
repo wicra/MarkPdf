@@ -1025,6 +1025,7 @@
     }
     .badge-original { background: var(--bg-warning); color: var(--text-warning); }
     .badge-lr       { background: var(--bg-success); color: var(--text-success); }
+    .badge-compact  { background: #e0e7ff; color: #4338ca; }
     .badge-ai       { background: var(--bg-accent);  color: var(--text-accent);  }
     .ai-variant-preview {
       padding: 10px;
@@ -3811,12 +3812,69 @@ Vous pouvez également faire référence à des images locales :
       return applyDirection(code, 'LR');
     }
 
+    function buildCompactVariant(code) {
+      // Heuristique locale (sans appel réseau) : si le diagramme est un
+      // flowchart/graph avec une longue chaîne linéaire de noeuds
+      // (A-->B-->C-->D-->E-->F...), on la découpe en groupes de 3 dans des
+      // subgraph, direction TB globale et LR à l'intérieur de chaque
+      // subgraph, pour forcer une grille compacte plutôt qu'une ligne ou
+      // colonne démesurée. Sert de filet de sécurité si l'IA est lente/HS,
+      // et de variante supplémentaire au choix sinon.
+      const isFlow = /^\s*(graph|flowchart)\s+(TB|BT|LR|RL|TD)/m.test(code);
+      if (!isFlow) return null;
+
+      const lines = code.split('\n');
+      const headerIdx = lines.findIndex(l => /^\s*(graph|flowchart)\s+/.test(l));
+      if (headerIdx === -1) return null;
+
+      const edgeLines = [];
+      const otherLines = [];
+      let hasSubgraph = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        if (i === headerIdx) continue;
+        const line = lines[i];
+        if (/^\s*subgraph\b/.test(line) || /^\s*end\s*$/.test(line)) {
+          hasSubgraph = true;
+        }
+        if (/-->|---|==>|-\.->/.test(line) && !/^\s*subgraph\b/.test(line)) {
+          edgeLines.push(line);
+        } else if (line.trim()) {
+          otherLines.push(line);
+        }
+      }
+
+      // Si déjà des subgraph, ou trop peu d'arêtes, laisser l'IA gérer plutôt
+      if (hasSubgraph || edgeLines.length < 6) return null;
+
+      const GROUP_SIZE = 3;
+      const groups = [];
+      for (let i = 0; i < edgeLines.length; i += GROUP_SIZE) {
+        groups.push(edgeLines.slice(i, i + GROUP_SIZE));
+      }
+      if (groups.length < 2) return null;
+
+      const headerLine = lines[headerIdx].replace(/(TB|BT|LR|RL|TD)/, 'TB');
+      const out = [headerLine];
+
+      otherLines.forEach(l => out.push(l));
+
+      groups.forEach((group, idx) => {
+        out.push(`  subgraph grp${idx + 1} ["Étape ${idx + 1}"]`);
+        out.push('    direction LR');
+        group.forEach(l => out.push('  ' + l));
+        out.push('  end');
+      });
+
+      return out.join('\n');
+    }
+
     function renderVariantCard(key, label, badgeClass, code, isDisabled = false) {
       const preview = code ? code.substring(0, 300) + (code.length > 300 ? '\u2026' : '') : '(identique à l\'original)';
       return `<div class="ai-variant-card" data-variant="${key}" ${isDisabled ? 'style="opacity:0.5;pointer-events:none"' : ''}>
         <div class="ai-variant-header">
           <span>${label}</span>
-          <span class="ai-variant-badge ${badgeClass}">${key === 'original' ? 'Original' : key === 'lr' ? 'Auto LR' : '✦ IA'}</span>
+          <span class="ai-variant-badge ${badgeClass}">${key === 'original' ? 'Original' : key === 'lr' ? 'Auto LR' : key === 'compact' ? 'Compact' : '✦ IA'}</span>
         </div>
         <div class="ai-variant-preview">${preview.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
       </div>`;
@@ -3846,23 +3904,26 @@ Vous pouvez également faire référence à des images locales :
     }
 
     function showAiVariants() {
-      const lrCode   = aiVariants.lr;
-      const aiCode   = aiVariants.ai;
-      const origCode = aiVariants.original;
+      const lrCode      = aiVariants.lr;
+      const compactCode = aiVariants.compact;
+      const aiCode      = aiVariants.ai;
+      const origCode    = aiVariants.original;
 
-      const lrSame = !lrCode || lrCode.trim() === origCode.trim();
-      const aiSame = !aiCode || aiCode.trim() === origCode.trim() || aiCode.trim() === (lrCode || '').trim();
+      const lrSame      = !lrCode || lrCode.trim() === origCode.trim();
+      const compactSame = !compactCode || compactCode.trim() === origCode.trim() || compactCode.trim() === (lrCode || '').trim();
+      const aiSame      = !aiCode || aiCode.trim() === origCode.trim() || aiCode.trim() === (lrCode || '').trim() || aiCode.trim() === (compactCode || '').trim();
 
       let html = '<div class="ai-variants-grid">';
       html += renderVariantCard('original', 'Original', 'badge-original', origCode);
       html += renderVariantCard('lr', 'Auto LR', 'badge-lr', lrSame ? null : lrCode, lrSame);
+      html += renderVariantCard('compact', 'Compact (document)', 'badge-compact', compactSame ? null : compactCode, compactSame);
       html += renderVariantCard('ai', 'Optimisé IA', 'badge-ai', aiSame ? null : aiCode, aiSame);
       html += '</div>';
 
       aiModalContent.innerHTML = html;
 
       // Sélectionner par défaut la meilleure option disponible
-      const bestKey = !aiSame ? 'ai' : !lrSame ? 'lr' : 'original';
+      const bestKey = !aiSame ? 'ai' : !compactSame ? 'compact' : !lrSame ? 'lr' : 'original';
       selectVariant(bestKey);
 
       // Event listeners sur les cartes
@@ -3899,6 +3960,7 @@ Vous pouvez également faire référence à des images locales :
 
       aiVariants.original = code;
       aiVariants.lr = buildLrVariant(code);
+      aiVariants.compact = buildCompactVariant(code);
 
       try {
         aiVariants.ai = await callClaudeHaiku(code);
