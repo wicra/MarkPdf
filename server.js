@@ -78,12 +78,16 @@ img { max-width: 100%; height: auto; }
 .mermaid {
     display: flex;
     justify-content: center;
+    align-items: center;
     margin: 20px 0;
     break-inside: avoid;
     page-break-inside: avoid;
+    overflow: visible;
 }
 .mermaid svg {
     max-width: 100%;
+    max-height: 240mm;
+    width: auto;
     height: auto;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
@@ -91,6 +95,8 @@ img { max-width: 100%; height: auto; }
     padding: 10px;
     box-sizing: border-box;
     display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 h2 { page-break-before: auto; }
 @page {
@@ -255,18 +261,28 @@ const FREE_MODELS = [
 ];
 
 const AI_LAYOUT_PROMPT = [
-    'Tu es un expert en syntaxe Mermaid. Optimise le layout de ce diagramme pour un affichage HORIZONTAL (A4 paysage, slides, dossier technique).',
+    'Tu es un expert en syntaxe Mermaid specialise dans l\'optimisation de schemas pour un rendu PAPIER/DOCUMENT (A4 ou A4 paysage, dossier technique). L\'objectif n\'est PAS de tout mettre sur une seule ligne ou une seule colonne, mais de repartir le diagramme dans l\'espace disponible pour qu\'il reste LISIBLE et COMPACT une fois imprime.',
+    '',
+    'CONTEXTE DU PROBLEME :',
+    'Un diagramme avec une seule direction (TB ou LR) et beaucoup de noeuds devient soit tres haut, soit tres large, et devient illisible une fois redimensionne dans un document. Il faut donc exploiter la largeur ET la hauteur disponibles en repartissant les noeuds en plusieurs rangees/colonnes logiques, comme du texte qui "wrap".',
+    '',
+    'STRATEGIE A APPLIQUER (dans cet ordre de preference) :',
+    '1. Identifier les branches paralleles ou independantes (noeuds qui ne dependent pas lineairement les uns des autres) et les regrouper avec des "subgraph" pour qu\'elles se positionnent cote a cote au lieu de s\'empiler en une seule chaine.',
+    '2. Pour un flowchart/graph/stateDiagram avec une longue chaine lineaire (6+ noeuds en cascade A-->B-->C-->D-->E-->F), la decouper en 2 ou 3 subgraph representant des etapes logiques (ex: "Entree", "Traitement", "Sortie"), avec une direction TB pour l\'ensemble des subgraph et LR a l\'interieur de chaque subgraph (ou inversement), afin que le rendu final forme une grille compacte plutot qu\'une ligne ou colonne demesuree.',
+    '3. Pour classDiagram et erDiagram : reorganiser uniquement l\'ORDRE de declaration des classes/entites et relations (sans rien changer au contenu) pour regrouper celles qui sont fortement liees, ce qui aide le moteur de layout de Mermaid a les positionner proches les unes des autres au lieu de les etaler.',
+    '4. Pour stateDiagram avec de nombreux etats : utiliser des etats composites (state X { ... }) si cela permet de regrouper logiquement un sous-ensemble d\'etats deja lies entre eux, reduisant la largeur ou hauteur totale.',
+    '5. sequenceDiagram et gitGraph : retourner tel quel, ces types n\'ont pas de notion de subgraph/grille exploitable.',
+    '6. Si le diagramme est deja petit (moins de 6 noeuds/classes/etats) ou deja bien reparti, retourner le code tel quel sans le complexifier inutilement.',
     '',
     'REGLES ABSOLUES :',
-    '1. Retourner UNIQUEMENT le code Mermaid brut. Zero texte. Zero balises markdown.',
-    '2. Ne JAMAIS modifier la logique : entites, relations, cardinalites, labels, classDef, styles.',
-    '3. Modifier UNIQUEMENT la directive direction et si necessaire l\'ordre des declarations.',
-    '4. classDiagram avec 4+ classes -> direction LR. Avec 1-3 classes -> garder l\'existant.',
-    '5. graph/flowchart avec 5+ noeuds -> LR. Moins -> garder l\'existant.',
-    '6. stateDiagram avec 4+ etats -> direction LR.',
-    '7. erDiagram, sequenceDiagram, gitGraph -> retourner tel quel sans modification.',
-    '8. Si deja en LR ou deja optimal -> retourner tel quel.',
-    '9. Respecter EXACTEMENT la meme indentation.',
+    '1. Retourner UNIQUEMENT le code Mermaid brut. Zero texte explicatif. Zero balises markdown (pas de ```).',
+    '2. Ne JAMAIS modifier la logique metier : entites, relations, cardinalites, labels, classDef, styles doivent rester strictement identiques au fond.',
+    '3. Tu peux ajouter des blocs "subgraph ... end" (avec un id et un titre court) UNIQUEMENT pour grouper visuellement des noeuds deja existants, jamais pour ajouter de nouveaux noeuds ou de nouvelles relations.',
+    '4. Tu peux modifier l\'ordre des declarations de noeuds/relations/classes, et la direction (TB/LR), mais jamais le contenu des labels ou les types de fleches/relations.',
+    '5. Le code doit rester syntaxiquement valide pour la version Mermaid utilisee (ne pas utiliser de fonctionnalites trop recentes ou obscures).',
+    '6. Respecter une indentation propre et coherente (2 espaces).',
+    '7. Si tu groupes en subgraph, donne des titres courts et neutres en francais (ex: "Etape 1", "Traitement", "Resultats") sauf si le diagramme suggere des noms plus pertinents bases sur son contenu existant.',
+    '8. L\'objectif final : un rendu qui tient dans un ratio proche de 4:3 a 16:9 plutot qu\'une bande tres longue et tres fine dans un sens ou l\'autre.',
 ].join('\n');
 
 app.post('/api/ai-optimize', async (req, res) => {
